@@ -4,20 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Biodata Kelas 84A MM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: { extend: {
-        colors: {
-          primary: { DEFAULT: '#0d5c3a', dark: '#004328', soft: '#e7f3ec' },
-          gold: { DEFAULT: '#c59b27', soft: '#fbf3dc' }
-        },
-        fontFamily: { sans: ['Plus Jakarta Sans', 'sans-serif'] }
-      } }
-    };
-  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block" rel="stylesheet">
+  <link rel="stylesheet" href="css/tailwind.css">
   <link rel="stylesheet" href="css/style.css">
   <script src="js/config.js"></script>
 </head>
@@ -37,7 +28,7 @@
       <nav id="nav" class="hidden" aria-label="Menu utama (desktop)"></nav>
       <div id="userBox" class="flex items-center gap-2"></div>
     </div>
-    <nav id="navMobile" class="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-3 pb-2" aria-label="Menu utama"></nav>
+    <nav id="navMobile" class="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-3 pb-2" style="min-height:52px" aria-label="Menu utama"></nav>
   </header>
 
   <!-- KONTAINER SPA: semua halaman disuntikkan di sini, URL tidak pernah berubah -->

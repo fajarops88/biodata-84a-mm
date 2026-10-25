@@ -3,7 +3,14 @@
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   font-size: 20px; line-height: 1; vertical-align: middle; flex-shrink: 0;
+  /* ukuran tetap + potong teks ligatur: ikon tidak menggeser tata letak saat font ikon belum selesai dimuat */
+  display: inline-block; width: 1em; height: 1em; overflow: hidden;
 }
+
+/* Ruang yang dipesan sejak awal agar halaman tidak bergeser saat data tiba */
+#app-container { min-height: 100vh; }
+#userBox { min-height: 40px; }
+#nav { min-height: 40px; }
 
 /* Tombol (tinggi minimal 44px agar mudah disentuh) */
 .btn {
