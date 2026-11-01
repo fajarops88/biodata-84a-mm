@@ -464,12 +464,6 @@ pages.beranda = async () => {
   AppState.pengingat = rPeng.status === 'fulfilled' ? rPeng.value : null;
   const pengHtml = anggota && AppState.pengingat ? pengingatDashboardHtml(AppState.pengingat) : '';
 
-  const panelTamu = '<div class="card p-5 shadow-lg"><h2 class="text-lg font-bold">Bergabung dengan Kelas</h2>'
-    + '<p class="mb-4 text-sm text-slate-500">Sudah punya akun? Tekan <strong>Masuk</strong> di pojok kanan atas. Belum terdaftar? Isi biodata Anda.</p>'
-    + '<div class="grid gap-2"><button class="btn btn-primary w-full" onclick="bukaLogin()"><span class="material-symbols-outlined">login</span>Masuk</button>'
-    + '<button class="btn btn-ghost w-full" onclick="navigateTo(\'formulir\')">Isi Biodata Sekarang</button>'
-    + (AppState.stats.waBantuan ? '<a class="btn btn-ghost w-full !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan mendaftar di ' + (AppState.stats.title || 'Biodata Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Butuh Bantuan? Hubungi Admin</a>' : '')
-    + '</div></div>';
   const pesan = { Menunggu: 'Biodata Anda sedang menunggu persetujuan admin.', Disetujui: 'Biodata Anda sudah disetujui. Silakan kenali teman sekelas.', Ditolak: 'Biodata Anda perlu diperbaiki. Lihat catatan admin.' };
   const panelAnggota = '<div class="card p-5 shadow-lg"><p class="text-sm text-slate-500">Halo,</p>'
     + '<h2 class="text-xl font-bold">' + esc(AppState.me ? AppState.me.NamaPanggilan : 'Admin') + '</h2>'
@@ -483,12 +477,12 @@ pages.beranda = async () => {
     ['groups', '3. Kenali teman', 'Cari dan lihat profil serta kontak teman yang disetujui.']];
   const P = AppState.publik;
   return '<section class="card overflow-hidden"><div class="h-1.5 bg-gradient-to-r from-primary via-emerald-600 to-gold"></div>'
-    + '<div class="grid items-center gap-8 p-6 md:p-10 lg:grid-cols-12"><div class="lg:col-span-7">'
+    + '<div class="grid items-center gap-8 p-6 md:p-10 lg:grid-cols-12"><div class="' + (AppState.token ? 'lg:col-span-7' : 'lg:col-span-12') + '">'
     + '<span class="chip bg-gold-soft text-amber-800"><span class="material-symbols-outlined !text-base">school</span>Magister Manajemen · Unissula</span>'
     + '<h1 class="mt-4 text-3xl font-extrabold tracking-tight text-primary-dark md:text-4xl">Biodata &amp; Perkenalan Teman Sekelas</h1>'
     + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
     + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
-    + '<div class="lg:col-span-5">' + (AppState.token ? panelAnggota : panelTamu) + '</div></div></section>'
+    + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
     + pengHtml
     + (P ? sambutanHtml(P) + visiMisiHtml(P) + strukturHtml(P) : '')
     + agendaSectionHtml(AppState.agenda.pub)
