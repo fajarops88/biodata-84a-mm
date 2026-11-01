@@ -11,7 +11,8 @@ const AppState = {
   stats: { approved: 0 }, members: null, adminData: null,
   page: 'beranda', tab: 'Menunggu', q: '', fotoData: null, editId: null,
   chatMessages: [], chatUnread: 0,
-  kuliahTab: 'chat', materi: null, materiFilter: '', pengingat: null, pengAdmin: null
+  kuliahTab: 'chat', materi: null, materiFilter: '', pengingat: null, pengAdmin: null,
+  publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null
 };
 
 const $ = id => document.getElementById(id);
@@ -37,7 +38,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|publik|agenda)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -96,7 +97,8 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null });
+  AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
   if (e && e.message === 'SESI_HABIS') {
@@ -114,6 +116,7 @@ async function doLogin(ev) {
   setBusy(btn, true, 'Memeriksa…');
   try {
     applySession(await api('api_login', f.email.value, f.pin.value));
+    closeModal();
     toast('Selamat datang!');
     navigateTo(landing());
   } catch (e) { fail(e); setBusy(btn, false); }
@@ -302,7 +305,7 @@ function renderShell() {
       + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="bukaGantiWa()" aria-label="Kontak WA Bantuan"><span class="material-symbols-outlined">support_agent</span><span class="hidden sm:inline">WA</span></button>' : '')
       + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="bukaGantiPin()" aria-label="Ganti PIN"><span class="material-symbols-outlined">key</span><span class="hidden sm:inline">PIN</span></button>'
       + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="doLogout()" aria-label="Keluar"><span class="material-symbols-outlined">logout</span><span class="hidden sm:inline">Keluar</span></button>'
-    : '';
+    : '<button type="button" class="btn btn-primary !min-h-[40px] !px-4" onclick="bukaLogin()"><span class="material-symbols-outlined">login</span>Masuk</button>';
 }
 
 async function navigateTo(page, opts) {
@@ -325,24 +328,148 @@ async function navigateTo(page, opts) {
 const pages = {};
 const after = {};
 
+/* ---------- Beranda publik: sambutan, visi misi, struktur, agenda ---------- */
+const HARI_ID = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+const ymdPlus = (ymd, n) => { const d = new Date(ymd + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const tglYmd = ymd => new Date(ymd + 'T00:00:00Z').toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const tglSingkat = ymd => new Date(ymd + 'T00:00:00Z').toLocaleDateString('id-ID', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const tglPendek = ymd => new Date(ymd + 'T00:00:00Z').toLocaleDateString('id-ID', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+function labelPekan(ws, we) {
+  const a = new Date(ws + 'T00:00:00Z'), b = new Date(we + 'T00:00:00Z');
+  const bln = d => d.toLocaleDateString('id-ID', { timeZone: 'UTC', month: 'long' });
+  const ta = a.getUTCFullYear(), tb = b.getUTCFullYear();
+  if (a.getUTCMonth() === b.getUTCMonth() && ta === tb) return a.getUTCDate() + ' – ' + b.getUTCDate() + ' ' + bln(b) + ' ' + tb;
+  if (ta === tb) return a.getUTCDate() + ' ' + bln(a) + ' – ' + b.getUTCDate() + ' ' + bln(b) + ' ' + tb;
+  return a.getUTCDate() + ' ' + bln(a) + ' ' + ta + ' – ' + b.getUTCDate() + ' ' + bln(b) + ' ' + tb;
+}
+const paragraf = t => String(t || '').split(/\n+/).map(x => x.trim()).filter(Boolean).map(x => '<p>' + esc(x) + '</p>').join('');
+
+function sambutanHtml(p) {
+  const k = p.pengurus[0];
+  return '<section class="mt-6" aria-labelledby="hSambutan"><div class="card p-6 md:p-8"><div class="flex flex-col gap-5 md:flex-row">'
+    + '<div class="flex shrink-0 flex-col items-center text-center md:w-40">'
+    + avatar({ NamaLengkap: k.nama || 'Ketua Kelas', NamaPanggilan: k.nama || 'Ketua Kelas', FotoUrl: k.fotoUrl }, 'h-28 w-28 rounded-2xl text-2xl ring-4 ring-gold-soft')
+    + '<div class="mt-3 text-sm font-bold">' + esc(k.nama || 'Ketua Kelas') + '</div><div class="text-xs text-slate-500">Ketua Kelas 84A MM</div></div>'
+    + '<div class="min-w-0 flex-1"><h2 id="hSambutan" class="flex items-center gap-2 text-xl font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">campaign</span>Sambutan Ketua Kelas</h2>'
+    + '<div class="mt-3 space-y-3 text-sm leading-relaxed text-slate-700">' + paragraf(p.sambutan) + '</div></div></div></div></section>';
+}
+
+function visiMisiHtml(p) {
+  return '<section class="mt-6 grid gap-4 md:grid-cols-2" aria-label="Visi dan Misi">'
+    + '<div class="card p-6"><h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">visibility</span>Visi</h2>'
+    + '<p class="mt-3 text-sm leading-relaxed text-slate-700">' + esc(p.visi) + '</p></div>'
+    + '<div class="card p-6"><h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">flag</span>Misi</h2>'
+    + '<ol class="mt-3 space-y-2 text-sm leading-relaxed text-slate-700">'
+    + p.misi.map((m, i) => '<li class="flex gap-3"><span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-bold text-primary">' + (i + 1) + '</span><span>' + esc(m) + '</span></li>').join('')
+    + '</ol></div></section>';
+}
+
+function strukturHtml(p) {
+  return '<section class="mt-6" aria-labelledby="hStruktur"><h2 id="hStruktur" class="mb-3 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">account_tree</span>Struktur Organisasi</h2>'
+    + '<div class="grid gap-3 sm:grid-cols-3">'
+    + p.pengurus.map(k => '<div class="card flex flex-col items-center p-5 text-center">'
+      + avatar({ NamaLengkap: k.nama || k.peran, NamaPanggilan: k.nama || k.peran, FotoUrl: k.fotoUrl }, 'h-24 w-24 rounded-2xl text-xl ring-4 ring-gold-soft')
+      + '<div class="mt-3 text-xs font-semibold uppercase text-gold">' + esc(k.peran) + '</div>'
+      + '<div class="mt-1 font-bold ' + (k.nama ? '' : 'text-slate-400') + '">' + esc(k.nama || 'Belum ditetapkan') + '</div></div>').join('')
+    + '</div></section>';
+}
+
+/* ---- Agenda (dipakai di Beranda publik dan di tab Jadwal Kuliah milik admin) ---- */
+function agendaItemHtml(it, admin) {
+  const jam = esc(it.jamMulai) + (it.jamSelesai ? '<span class="block text-xs font-medium text-slate-500">s.d. ' + esc(it.jamSelesai) + '</span>' : '');
+  let chips = '', judul = '', info = '', redup = '';
+  if (it.ujian) {
+    chips = '<span class="chip bg-red-600 text-white">' + esc(it.jenis) + '</span>';
+    judul = esc(it.judul);
+    info = (it.mataKuliah ? esc(it.mataKuliah) : '') + (it.catatan ? (it.mataKuliah ? ' · ' : '') + esc(it.catatan) : '');
+  } else {
+    judul = esc(it.mataKuliah);
+    info = [it.ruang, it.dosen].filter(Boolean).map(esc).join(' · ');
+    if (it.status === 'batal') { chips = '<span class="chip bg-red-100 text-red-700">Dibatalkan</span>'; redup = ' opacity-70'; }
+    else if (it.status === 'pindah') { chips = '<span class="chip bg-amber-100 text-amber-800">Dipindah ke ' + esc(tglPendek(it.ke)) + '</span>'; redup = ' opacity-70'; }
+    else if (it.status === 'pengganti') chips = '<span class="chip bg-sky-100 text-sky-700">Jadwal pengganti (semula ' + esc(tglPendek(it.dari)) + ')</span>';
+    if (it.catatan) info += (info ? ' · ' : '') + esc(it.catatan);
+  }
+  const garis = (it.status === 'batal' || it.status === 'pindah') ? ' line-through' : '';
+  let aksi = '';
+  if (admin && !it.ujian && it.jadwalId) {
+    const a = '\'' + it.jadwalId + '\',\'' + it.tglAsli + '\'';
+    aksi = '<div class="flex flex-wrap gap-1">'
+      + (it.status === 'normal'
+        ? '<button type="button" class="btn btn-ghost !min-h-[36px] !px-3 !text-red-700" onclick="bukaBatalPertemuan(' + a + ')"><span class="material-symbols-outlined">event_busy</span>Batalkan</button>'
+          + '<button type="button" class="btn btn-ghost !min-h-[36px] !px-3" onclick="bukaGeserPertemuan(' + a + ')"><span class="material-symbols-outlined">edit_calendar</span>Geser</button>'
+        : '<button type="button" class="btn btn-ghost !min-h-[36px] !px-3" onclick="pulihPertemuan(' + a + ')"><span class="material-symbols-outlined">undo</span>Pulihkan</button>')
+      + '</div>';
+  }
+  return '<article class="flex flex-wrap items-start gap-3 rounded-xl border border-slate-100 p-3' + redup + '">'
+    + '<div class="w-20 shrink-0 text-sm font-bold text-primary">' + jam + '</div>'
+    + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">' + chips + '</div>'
+    + '<h4 class="font-bold' + garis + '">' + judul + '</h4>'
+    + (info ? '<p class="text-xs text-slate-600">' + info + '</p>' : '') + '</div>' + aksi + '</article>';
+}
+
+function agendaBodyHtml(d, admin) {
+  if (!d.items.length) {
+    return '<div class="card p-8 text-center text-sm text-slate-500"><span class="material-symbols-outlined !text-4xl text-slate-300">event_available</span>'
+      + '<p class="mt-2">Tidak ada kuliah atau ujian pada pekan ini.</p></div>';
+  }
+  const per = {};
+  d.items.forEach(it => { (per[it.tanggal] = per[it.tanggal] || []).push(it); });
+  return Object.keys(per).sort().map(tgl => '<div class="card p-4"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
+    + (tgl === d.hariIni ? '<span class="chip bg-primary text-white">Hari ini</span>' : '') + '</h3>'
+    + '<div class="space-y-2">' + per[tgl].map(it => agendaItemHtml(it, admin)).join('') + '</div></div>').join('');
+}
+
+function agendaBoxHtml(mode, d) {
+  if (!d) return '<div class="card p-6 text-center text-sm text-slate-500">Agenda belum dapat dimuat. Muat ulang halaman sebentar lagi.</div>';
+  const btn = (arah, ikon, label) => '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="gantiPekan(\'' + mode + '\',' + arah + ')" aria-label="' + label + '"><span class="material-symbols-outlined">' + ikon + '</span></button>';
+  return '<div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div class="flex items-center gap-1">'
+    + btn(-1, 'chevron_left', 'Pekan sebelumnya')
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="gantiPekan(\'' + mode + '\',0)">Pekan ini</button>'
+    + btn(1, 'chevron_right', 'Pekan berikutnya') + '</div>'
+    + '<div class="text-sm font-semibold text-slate-700">' + esc(labelPekan(d.weekStart, d.weekEnd)) + '</div></div>'
+    + '<div class="space-y-3">' + agendaBodyHtml(d, mode === 'adm') + '</div>';
+}
+function agendaSectionHtml(d) {
+  return '<section class="mt-6" aria-labelledby="hAgenda"><h2 id="hAgenda" class="mb-3 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">calendar_month</span>Agenda</h2>'
+    + '<div id="agenda_pub">' + agendaBoxHtml('pub', d) + '</div></section>';
+}
+function paintAgenda(mode) {
+  const box = $('agenda_' + mode); if (!box) return;
+  box.innerHTML = agendaBoxHtml(mode, AppState.agenda[mode]); box.style.opacity = '';
+}
+let _seqAgenda = 0;
+async function gantiPekan(mode, arah) {
+  const d = AppState.agenda[mode]; if (!d) return;
+  const target = arah === 0 ? '' : ymdPlus(d.weekStart, 7 * arah);
+  const seq = ++_seqAgenda, box = $('agenda_' + mode);
+  if (box) box.style.opacity = '.5';
+  try {
+    const baru = mode === 'adm' ? await call('api_agendaAdmin', target) : await api('api_agenda', target);
+    if (seq !== _seqAgenda) return;
+    AppState.agenda[mode] = baru; paintAgenda(mode);
+  } catch (e) { if (box) box.style.opacity = ''; fail(e); }
+}
+
 pages.beranda = async () => {
   const s = AppState.me && AppState.me.Status;
-  let pengHtml = '';
-  if (AppState.token && isApproved()) {
-    try { AppState.pengingat = await call('api_pengingat'); pengHtml = pengingatDashboardHtml(AppState.pengingat); }
-    catch (e) { if (e && e.message === 'SESI_HABIS') throw e; /* gagal memuat pengingat tidak menghalangi Beranda */ }
-  }
-  const panelTamu = '<div class="card p-5 shadow-lg"><h2 class="text-lg font-bold">Masuk</h2>'
-    + '<p class="mb-4 text-sm text-slate-500">Gunakan email dan PIN yang Anda buat saat mendaftar.</p>'
-    + '<form onsubmit="doLogin(event)" class="space-y-3">'
-    + '<div><label class="lbl" for="lgEmail">Username</label>'
-    + '<input id="lgEmail" name="email" type="text" autocomplete="username" required class="inp" placeholder="nama@email.com atau admin"></div>'
-    + '<div><label class="lbl" for="lgPin">PIN</label><input id="lgPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required class="inp"></div>'
-    + '<button class="btn btn-primary w-full" type="submit">Masuk</button></form>'
-    + '<div class="my-4 flex items-center gap-3 text-xs text-slate-400"><span class="h-px flex-1 bg-slate-200"></span>belum terdaftar?<span class="h-px flex-1 bg-slate-200"></span></div>'
+  const anggota = !!(AppState.token && isApproved());
+  // Data publik dan pengingat dimuat bersamaan; satu yang gagal tidak menghalangi Beranda.
+  const [rPub, rAgenda, rPeng] = await Promise.allSettled([
+    api('api_publik'), api('api_agenda', ''), anggota ? call('api_pengingat') : Promise.resolve(null)
+  ]);
+  if (rPeng.status === 'rejected' && rPeng.reason && rPeng.reason.message === 'SESI_HABIS') throw rPeng.reason;
+  AppState.publik = rPub.status === 'fulfilled' ? rPub.value : null;
+  AppState.agenda.pub = rAgenda.status === 'fulfilled' ? rAgenda.value : null;
+  AppState.pengingat = rPeng.status === 'fulfilled' ? rPeng.value : null;
+  const pengHtml = anggota && AppState.pengingat ? pengingatDashboardHtml(AppState.pengingat) : '';
+
+  const panelTamu = '<div class="card p-5 shadow-lg"><h2 class="text-lg font-bold">Bergabung dengan Kelas</h2>'
+    + '<p class="mb-4 text-sm text-slate-500">Sudah punya akun? Tekan <strong>Masuk</strong> di pojok kanan atas. Belum terdaftar? Isi biodata Anda.</p>'
+    + '<div class="grid gap-2"><button class="btn btn-primary w-full" onclick="bukaLogin()"><span class="material-symbols-outlined">login</span>Masuk</button>'
     + '<button class="btn btn-ghost w-full" onclick="navigateTo(\'formulir\')">Isi Biodata Sekarang</button>'
-    + (AppState.stats.waBantuan ? '<a class="btn btn-ghost w-full mt-2 !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan mendaftar di ' + (AppState.stats.title || 'Biodata Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Butuh Bantuan? Hubungi Admin</a>' : '')
-    + '</div>';
+    + (AppState.stats.waBantuan ? '<a class="btn btn-ghost w-full !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan mendaftar di ' + (AppState.stats.title || 'Biodata Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Butuh Bantuan? Hubungi Admin</a>' : '')
+    + '</div></div>';
   const pesan = { Menunggu: 'Biodata Anda sedang menunggu persetujuan admin.', Disetujui: 'Biodata Anda sudah disetujui. Silakan kenali teman sekelas.', Ditolak: 'Biodata Anda perlu diperbaiki. Lihat catatan admin.' };
   const panelAnggota = '<div class="card p-5 shadow-lg"><p class="text-sm text-slate-500">Halo,</p>'
     + '<h2 class="text-xl font-bold">' + esc(AppState.me ? AppState.me.NamaPanggilan : 'Admin') + '</h2>'
@@ -354,6 +481,7 @@ pages.beranda = async () => {
   const langkah = [['edit_note', '1. Isi biodata', 'Lengkapi data diri, foto, dan perkenalan singkat.'],
     ['verified_user', '2. Persetujuan admin', 'Admin memeriksa agar data hanya dilihat teman sekelas.'],
     ['groups', '3. Kenali teman', 'Cari dan lihat profil serta kontak teman yang disetujui.']];
+  const P = AppState.publik;
   return '<section class="card overflow-hidden"><div class="h-1.5 bg-gradient-to-r from-primary via-emerald-600 to-gold"></div>'
     + '<div class="grid items-center gap-8 p-6 md:p-10 lg:grid-cols-12"><div class="lg:col-span-7">'
     + '<span class="chip bg-gold-soft text-amber-800"><span class="material-symbols-outlined !text-base">school</span>Magister Manajemen · Unissula</span>'
@@ -362,9 +490,27 @@ pages.beranda = async () => {
     + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
     + '<div class="lg:col-span-5">' + (AppState.token ? panelAnggota : panelTamu) + '</div></div></section>'
     + pengHtml
-    + '<section class="mt-6 grid gap-4 md:grid-cols-3">' + langkah.map(l => '<div class="card p-5"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-primary"><span class="material-symbols-outlined">' + l[0] + '</span></span>'
-      + '<h3 class="mt-3 font-bold">' + l[1] + '</h3><p class="mt-1 text-sm text-slate-600">' + l[2] + '</p></div>').join('') + '</section>';
+    + (P ? sambutanHtml(P) + visiMisiHtml(P) + strukturHtml(P) : '')
+    + agendaSectionHtml(AppState.agenda.pub)
+    + (AppState.token ? '' : '<section class="mt-6 grid gap-4 md:grid-cols-3">' + langkah.map(l => '<div class="card p-5"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-primary"><span class="material-symbols-outlined">' + l[0] + '</span></span>'
+      + '<h3 class="mt-3 font-bold">' + l[1] + '</h3><p class="mt-1 text-sm text-slate-600">' + l[2] + '</p></div>').join('') + '</section>');
 };
+
+/* ---- Jendela Masuk (tombol di pojok kanan atas header) ---- */
+function bukaLogin() {
+  const wa = AppState.stats.waBantuan
+    ? '<a class="btn btn-ghost mt-2 w-full !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan masuk ke ' + (AppState.stats.title || 'Biodata Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Lupa PIN? Hubungi Admin</a>' : '';
+  openModal('<div class="p-5"><div class="mb-4 flex items-start justify-between gap-3"><div><h2 class="text-lg font-bold">Masuk</h2>'
+    + '<p class="text-sm text-slate-500">Gunakan email dan PIN yang Anda buat saat mendaftar.</p></div>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="closeModal()" aria-label="Tutup"><span class="material-symbols-outlined">close</span></button></div>'
+    + '<form onsubmit="doLogin(event)" class="space-y-3">'
+    + '<div><label class="lbl" for="lgEmail">Username</label>'
+    + '<input id="lgEmail" name="email" type="text" autocomplete="username" required class="inp" placeholder="nama@email.com atau admin" data-autofocus></div>'
+    + '<div><label class="lbl" for="lgPin">PIN</label><input id="lgPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required class="inp"></div>'
+    + '<button class="btn btn-primary w-full" type="submit">Masuk</button></form>'
+    + '<div class="my-4 flex items-center gap-3 text-xs text-slate-400"><span class="h-px flex-1 bg-slate-200"></span>belum terdaftar?<span class="h-px flex-1 bg-slate-200"></span></div>'
+    + '<button class="btn btn-ghost w-full" onclick="closeModal();navigateTo(\'formulir\')">Isi Biodata Sekarang</button>' + wa + '</div>');
+}
 
 pages.formulir = async o => {
   const adminEdit = !!o.editId;
@@ -949,6 +1095,148 @@ async function hapusPengingat(id) {
   catch (e) { closeModal(); fail(e); }
 }
 
+/* ---- Profil Kelas: tab di Panel Admin (sambutan, visi, misi, pengurus) ---- */
+async function paintProfilAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  body.innerHTML = loadingHtml();
+  try {
+    if (!AppState.profilAdmin) AppState.profilAdmin = await call('api_profilAdmin');
+    if (AppState.tab === 'Profil') renderProfilAdmin();
+  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
+}
+function renderProfilAdmin() {
+  const body = $('adminBody'); if (!body || !AppState.profilAdmin) return;
+  const d = AppState.profilAdmin, p = d.profil;
+  const pilih = (id, nilai) => '<select id="' + id + '" class="inp"><option value="">Belum ditetapkan</option>'
+    + d.anggota.map(a => '<option value="' + esc(a.ID) + '"' + (a.ID === nilai ? ' selected' : '') + '>' + esc(a.Nama) + '</option>').join('') + '</select>';
+  body.innerHTML = '<form class="card grid gap-4 p-5" onsubmit="kirimProfil(event)"><h2 class="font-bold">Profil Kelas (tampil di Beranda untuk semua pengunjung)</h2>'
+    + '<div class="grid gap-3 md:grid-cols-3">'
+    + '<div><label class="lbl" for="prKetua">Ketua Kelas</label>' + pilih('prKetua', p.ketua) + '</div>'
+    + '<div><label class="lbl" for="prWakil1">Wakil Ketua Kelas I</label>' + pilih('prWakil1', p.wakil1) + '</div>'
+    + '<div><label class="lbl" for="prWakil2">Wakil Ketua Kelas II</label>' + pilih('prWakil2', p.wakil2) + '</div></div>'
+    + '<p class="-mt-2 text-xs text-slate-500">Pilihan diambil dari anggota yang sudah disetujui. Nama dan foto pengurus akan terlihat oleh siapa saja yang membuka tautan.</p>'
+    + '<div><div class="flex items-center justify-between"><label class="lbl" for="prSambutan">Sambutan Ketua Kelas</label><span class="text-xs text-slate-500">pisahkan paragraf dengan baris baru</span></div>'
+    + '<textarea id="prSambutan" class="inp" rows="9" maxlength="3000" required>' + esc(p.sambutan) + '</textarea></div>'
+    + '<div><label class="lbl" for="prVisi">Visi</label><textarea id="prVisi" class="inp" rows="3" maxlength="600" required>' + esc(p.visi) + '</textarea></div>'
+    + '<div><div class="flex items-center justify-between"><label class="lbl" for="prMisi">Misi</label><span class="text-xs text-slate-500">satu poin per baris</span></div>'
+    + '<textarea id="prMisi" class="inp" rows="7" maxlength="3000" required>' + esc(p.misi) + '</textarea></div>'
+    + '<div><button type="submit" class="btn btn-primary w-full sm:w-auto"><span class="material-symbols-outlined">save</span>Simpan Profil</button></div></form>';
+}
+async function kirimProfil(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]');
+  const p = { sambutan: $('prSambutan').value, visi: $('prVisi').value, misi: $('prMisi').value,
+    ketua: $('prKetua').value, wakil1: $('prWakil1').value, wakil2: $('prWakil2').value };
+  setBusy(btn, true, 'Menyimpan…');
+  try { AppState.profilAdmin.profil = await call('api_simpanProfil', p); toast('Profil kelas disimpan.'); renderProfilAdmin(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+
+/* ---- Jadwal Kuliah: tab di Panel Admin (jadwal tetap mingguan + atur satu pertemuan) ---- */
+async function paintJadwalAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  body.innerHTML = loadingHtml();
+  try {
+    const [j, a] = await Promise.all([AppState.jadwalAdmin ? Promise.resolve(AppState.jadwalAdmin) : call('api_jadwalAdmin'), call('api_agendaAdmin', '')]);
+    AppState.jadwalAdmin = j; AppState.agenda.adm = a;
+    if (AppState.tab === 'Jadwal') renderJadwalAdmin();
+  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
+}
+function renderJadwalAdmin() {
+  const body = $('adminBody'); if (!body || !AppState.jadwalAdmin) return;
+  const d = AppState.jadwalAdmin;
+  const opsiMk = d.matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
+  const opsiHari = HARI_ID.slice(1).map((h, i) => '<option value="' + (i + 1) + '">' + h + '</option>').join('');
+  const form = '<form id="frmJadwal" class="card mb-4 grid gap-3 p-5 md:grid-cols-2" onsubmit="kirimJadwal(event)"><input type="hidden" id="jwId" value="">'
+    + '<h2 id="jwJudul" class="font-bold md:col-span-2">Tambah Jadwal Kuliah (berulang tiap minggu)</h2>'
+    + '<div><label class="lbl" for="jwMatkul">Mata kuliah</label><select id="jwMatkul" class="inp" required>' + opsiMk + '</select></div>'
+    + '<div><label class="lbl" for="jwHari">Hari</label><select id="jwHari" class="inp" required>' + opsiHari + '</select></div>'
+    + '<div><label class="lbl" for="jwJm">Jam mulai (WITA)</label><input id="jwJm" class="inp" type="time" required></div>'
+    + '<div><label class="lbl" for="jwJs">Jam selesai (WITA)</label><input id="jwJs" class="inp" type="time" required></div>'
+    + '<div><label class="lbl" for="jwRuang">Ruang (opsional)</label><input id="jwRuang" class="inp" type="text" maxlength="80" placeholder="Contoh: R. 3.2 atau Daring"></div>'
+    + '<div><label class="lbl" for="jwDosen">Dosen (opsional)</label><input id="jwDosen" class="inp" type="text" maxlength="120" placeholder="Nama dosen pengampu"></div>'
+    + '<div><label class="lbl" for="jwMulai">Semester mulai</label><input id="jwMulai" class="inp" type="date" required></div>'
+    + '<div><label class="lbl" for="jwSelesai">Semester selesai</label><input id="jwSelesai" class="inp" type="date" required></div>'
+    + '<div class="flex flex-wrap gap-2 md:col-span-2"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">save</span><span id="jwTombol">Simpan Jadwal</span></button>'
+    + '<button type="button" id="jwBatal" class="btn btn-ghost hidden" onclick="batalUbahJadwal()">Batal ubah</button></div></form>';
+  const daftar = d.jadwal.length ? d.jadwal.map(j => '<article class="card flex items-center gap-3 p-4">'
+    + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><span class="material-symbols-outlined">event_repeat</span></span>'
+    + '<div class="min-w-0 flex-1"><h3 class="truncate font-bold">' + esc(j.MataKuliah) + '</h3>'
+    + '<p class="truncate text-xs text-slate-600">Tiap ' + esc(HARI_ID[j.Hari]) + ' · ' + esc(j.JamMulai) + '–' + esc(j.JamSelesai) + (j.Ruang ? ' · ' + esc(j.Ruang) : '') + (j.Dosen ? ' · ' + esc(j.Dosen) : '') + '</p>'
+    + '<p class="truncate text-xs text-slate-500">' + esc(tglSingkat(j.Mulai)) + ' s.d. ' + esc(tglSingkat(j.Selesai)) + '</p></div>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahJadwal(\'' + j.ID + '\')" aria-label="Ubah jadwal"><span class="material-symbols-outlined">edit</span></button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusJadwal(\'' + j.ID + '\')" aria-label="Hapus jadwal"><span class="material-symbols-outlined">delete</span></button></article>').join('')
+    : '<div class="card p-8 text-center text-sm text-slate-500"><span class="material-symbols-outlined !text-4xl text-slate-300">event_repeat</span><p class="mt-2">Belum ada jadwal. Isi sekali, lalu Agenda terbentuk otomatis tiap minggu.</p></div>';
+  body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>'
+    + '<h2 class="mb-1 mt-8 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">calendar_month</span>Atur Pertemuan per Pekan</h2>'
+    + '<p class="mb-3 text-xs text-slate-500">Batalkan atau geser satu pertemuan tanpa mengubah jadwal tetapnya. UTS dan UAS diisi lewat tab Pengingat dan otomatis tampil di Agenda.</p>'
+    + '<div id="agenda_adm">' + agendaBoxHtml('adm', AppState.agenda.adm) + '</div>';
+}
+async function kirimJadwal(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]');
+  const p = { id: $('jwId').value, mataKuliah: $('jwMatkul').value, hari: Number($('jwHari').value), jamMulai: $('jwJm').value, jamSelesai: $('jwJs').value,
+    ruang: $('jwRuang').value.trim(), dosen: $('jwDosen').value.trim(), mulai: $('jwMulai').value, selesai: $('jwSelesai').value };
+  setBusy(btn, true, 'Menyimpan…');
+  try {
+    AppState.jadwalAdmin = await call('api_simpanJadwal', p);
+    AppState.agenda.adm = await call('api_agendaAdmin', AppState.agenda.adm ? AppState.agenda.adm.weekStart : '');
+    toast(p.id ? 'Jadwal diperbarui.' : 'Jadwal ditambahkan.'); renderJadwalAdmin();
+  } catch (e) { setBusy(btn, false); fail(e); }
+}
+function ubahJadwal(id) {
+  const j = AppState.jadwalAdmin.jadwal.find(x => x.ID === id); if (!j) return;
+  $('jwId').value = j.ID; $('jwMatkul').value = j.MataKuliah; $('jwHari').value = String(j.Hari);
+  $('jwJm').value = j.JamMulai; $('jwJs').value = j.JamSelesai; $('jwRuang').value = j.Ruang || ''; $('jwDosen').value = j.Dosen || '';
+  $('jwMulai').value = j.Mulai; $('jwSelesai').value = j.Selesai;
+  $('jwJudul').textContent = 'Ubah Jadwal Kuliah'; $('jwTombol').textContent = 'Simpan Perubahan'; $('jwBatal').classList.remove('hidden');
+  $('frmJadwal').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function batalUbahJadwal() { renderJadwalAdmin(); }
+function konfirmasiHapusJadwal(id) {
+  openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-red-100 text-red-700"><span class="material-symbols-outlined">delete_forever</span></span>'
+    + '<div><h2 class="text-lg font-bold">Hapus jadwal?</h2><p class="text-sm text-slate-600">Semua pertemuan dari jadwal ini hilang dari Agenda, termasuk yang pernah dibatalkan atau digeser.</p></div></div>'
+    + '<div class="mt-5 flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()" data-autofocus>Batal</button>'
+    + '<button class="btn btn-danger" onclick="hapusJadwal(\'' + id + '\')">Ya, hapus</button></div></div>');
+}
+async function hapusJadwal(id) {
+  try {
+    AppState.jadwalAdmin = await call('api_hapusJadwal', id);
+    AppState.agenda.adm = await call('api_agendaAdmin', AppState.agenda.adm ? AppState.agenda.adm.weekStart : '');
+    closeModal(); toast('Jadwal dihapus.'); renderJadwalAdmin();
+  } catch (e) { closeModal(); fail(e); }
+}
+
+/* ---- Batalkan / geser / pulihkan satu pertemuan ---- */
+async function kirimAturPertemuan(p, btn) {
+  if (btn) setBusy(btn, true, 'Menyimpan…');
+  try { AppState.agenda.adm = await call('api_aturPertemuan', p); closeModal(); toast('Agenda diperbarui.'); paintAgenda('adm'); }
+  catch (e) { if (btn) setBusy(btn, false); fail(e); }
+}
+function bukaBatalPertemuan(jid, tgl) {
+  openModal('<form class="p-5" onsubmit="event.preventDefault();kirimAturPertemuan({jadwalId:\'' + jid + '\',tanggal:\'' + tgl + '\',aksi:\'batal\',catatan:$(\'bpCatatan\').value.trim()},this.querySelector(\'[type=submit]\'))">'
+    + '<h2 class="text-lg font-bold">Batalkan pertemuan?</h2><p class="mt-1 text-sm text-slate-600">' + esc(tglYmd(tgl)) + '. Di Agenda akan tampil "Dibatalkan"; jadwal tetapnya tidak berubah.</p>'
+    + '<div class="mt-3"><label class="lbl" for="bpCatatan">Alasan (opsional)</label><input id="bpCatatan" class="inp" type="text" maxlength="200" placeholder="Contoh: Dosen dinas luar" data-autofocus></div>'
+    + '<div class="mt-5 flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+    + '<button type="submit" class="btn btn-danger">Ya, batalkan</button></div></form>');
+}
+function bukaGeserPertemuan(jid, tgl) {
+  openModal('<form class="p-5" onsubmit="event.preventDefault();kirimGeserPertemuan(\'' + jid + '\',\'' + tgl + '\',this)">'
+    + '<h2 class="text-lg font-bold">Geser pertemuan</h2><p class="mt-1 text-sm text-slate-600">Pertemuan ' + esc(tglYmd(tgl)) + '. Kosongkan jam dan ruang bila tidak berubah.</p>'
+    + '<div class="mt-3 grid gap-3 sm:grid-cols-2"><div class="sm:col-span-2"><label class="lbl" for="gsTgl">Tanggal pengganti</label><input id="gsTgl" class="inp" type="date" required value="' + tgl + '" data-autofocus></div>'
+    + '<div><label class="lbl" for="gsJm">Jam mulai</label><input id="gsJm" class="inp" type="time"></div>'
+    + '<div><label class="lbl" for="gsJs">Jam selesai</label><input id="gsJs" class="inp" type="time"></div>'
+    + '<div class="sm:col-span-2"><label class="lbl" for="gsRuang">Ruang</label><input id="gsRuang" class="inp" type="text" maxlength="80" placeholder="Contoh: Daring"></div>'
+    + '<div class="sm:col-span-2"><label class="lbl" for="gsCatatan">Catatan (opsional)</label><input id="gsCatatan" class="inp" type="text" maxlength="200" placeholder="Contoh: Diganti karena libur nasional"></div></div>'
+    + '<div class="mt-5 flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+    + '<button type="submit" class="btn btn-primary">Simpan</button></div></form>');
+}
+function kirimGeserPertemuan(jid, tgl, form) {
+  kirimAturPertemuan({ jadwalId: jid, tanggal: tgl, aksi: 'geser', tanggalBaru: $('gsTgl').value, jamMulai: $('gsJm').value, jamSelesai: $('gsJs').value,
+    ruang: $('gsRuang').value.trim(), catatan: $('gsCatatan').value.trim() }, form.querySelector('[type=submit]'));
+}
+function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal: tgl, aksi: 'pulih' }); }
+
 /* ---- Panel admin ---- */
 pages.admin = async () => {
   if (!AppState.isAdmin) return lockedHtml('Halaman ini khusus admin.');
@@ -960,19 +1248,22 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengingat'];
+  const tabs = ['Menunggu', 'Semua', 'Pengingat', 'Profil', 'Jadwal'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
-    + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
-    + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + (t === 'Menunggu' ? 'Menunggu Persetujuan (' + c.Menunggu + ')' : t === 'Semua' ? 'Semua Data (' + c.total + ')' : 'Pengingat') + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (AppState.tab === 'Pengingat' ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
+    + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
+    + '<div class="relative w-full sm:w-72' + (['Pengingat', 'Profil', 'Jadwal'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
 function setTab(t) { AppState.tab = t; AppState.q = ''; $('app-container').innerHTML = adminHtml(); paintAdmin(); }
 function paintAdmin() {
   if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
+  if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
+  if (AppState.tab === 'Jadwal') { paintJadwalAdmin(); return; }
   const q = (AppState.q || '').toLowerCase().trim();
   let rows = AppState.adminData.rows.filter(r => (AppState.tab === 'Semua' || r.Status === 'Menunggu')
     && (!q || [r.NamaLengkap, r.NamaPanggilan, r.NIM, r.Email, r.TempatKerja].join(' ').toLowerCase().includes(q)));
