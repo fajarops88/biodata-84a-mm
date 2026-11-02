@@ -696,10 +696,15 @@ async function pickTugasFile(inp) {
 pages.tugas = async () => {
   if (!AppState.token) return lockedHtml('Silakan masuk terlebih dahulu.');
   if (!isApproved()) return lockedHtml('Biodata Anda belum disetujui admin, sehingga menu Tugas Kuliah belum dapat dibuka.', '<button class="btn btn-primary mt-5" onclick="navigateTo(\'status\')">Lihat Status</button>');
-  if (AppState.isAdmin) { AppState.tugasAdmin = await call('api_tugasAdmin'); return tugasAdminHtml(); }
   tugasFileData = null; tugasFileName = '';
-  AppState.matkul = await call('api_matkul');
-  AppState.tugasSaya = await call('api_tugasSaya');
+  // Admin memakai tampilan anggota (unggah, tugas saya, tugas teman) lalu daftar semua tugas di bawahnya.
+  const [matkul, saya, semua] = await Promise.all([
+    call('api_matkul'), call('api_tugasSaya'),
+    AppState.isAdmin ? call('api_tugasAdmin') : Promise.resolve(null)
+  ]);
+  AppState.matkul = matkul;
+  AppState.tugasSaya = saya;
+  if (AppState.isAdmin) { AppState.tugasAdmin = semua; return tugasMhsHtml() + tugasAdminHtml(); }
   return tugasMhsHtml();
 };
 
@@ -781,21 +786,31 @@ async function hapusTugas(id) {
 }
 
 /* ---- Tugas kuliah: panel admin ---- */
-function tugasAdminHtml() {
+function tugasAdminRows_() {
   const c = AppState.tugasAdmin;
   const q = (AppState.tugasQ || '').toLowerCase().trim();
-  const rows = c.rows.filter(r => !q || [r.NamaMahasiswa, r.Email, r.MataKuliah, r.JudulTugas].join(' ').toLowerCase().includes(q));
-  const daftar = rows.length ? rows.map(t => tugasKartu(t, { showName: true, showDelete: true })).join('')
+  return c.rows.filter(r => !q || [r.NamaMahasiswa, r.Email, r.MataKuliah, r.JudulTugas].join(' ').toLowerCase().includes(q));
+}
+function tugasAdminDaftarHtml() {
+  const rows = tugasAdminRows_();
+  return rows.length ? rows.map(t => tugasKartu(t, { showName: true, showDelete: true })).join('')
     : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">upload_file</span><p class="mt-2">Belum ada tugas yang diunggah.</p></div>';
-  return '<div class="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><h1 class="text-2xl font-extrabold text-primary-dark">Tugas Mahasiswa</h1>'
-    + '<p class="text-sm text-slate-500">' + rows.length + ' dari ' + c.rows.length + ' tugas terkumpul</p></div>'
+}
+function tugasAdminHitungText_() { return tugasAdminRows_().length + ' dari ' + AppState.tugasAdmin.rows.length + ' tugas terkumpul'; }
+function tugasAdminHtml() {
+  return '<div class="mt-10 mb-5 flex flex-col justify-between gap-4 border-t border-slate-200 pt-8 md:flex-row md:items-end"><div><h2 class="text-xl font-extrabold text-primary-dark">Semua Tugas Mahasiswa</h2>'
+    + '<p id="tugasAdminHitung" class="text-sm text-slate-500">' + tugasAdminHitungText_() + '</p></div>'
     + '<div class="flex w-full gap-2 md:w-auto"><div class="relative flex-1 md:w-72"><label class="sr-only" for="tq">Cari</label>'
     + '<span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="tq" class="inp pl-10" type="search" placeholder="Cari nama / mata kuliah / judul…" value="' + esc(AppState.tugasQ || '') + '" oninput="AppState.tugasQ=this.value;renderAdminTugas()"></div>'
     + '<button class="btn btn-ghost" onclick="bukaKelolaMatkul()"><span class="material-symbols-outlined">tune</span>Mata Kuliah</button></div></div>'
-    + '<div id="tugasAdminBody" class="space-y-3">' + daftar + '</div>';
+    + '<div id="tugasAdminBody" class="space-y-3">' + tugasAdminDaftarHtml() + '</div>';
 }
-function renderAdminTugas() { $('kuliahBody').innerHTML = tugasAdminHtml(); }
+// Hanya daftar yang digambar ulang, supaya kolom cari tidak kehilangan fokus saat mengetik.
+function renderAdminTugas() {
+  $('tugasAdminBody').innerHTML = tugasAdminDaftarHtml();
+  $('tugasAdminHitung').textContent = tugasAdminHitungText_();
+}
 function bukaKelolaMatkul() {
   const list = (AppState.tugasAdmin && AppState.tugasAdmin.matkul) || [];
   openModal('<form class="p-5" onsubmit="kirimKelolaMatkul(event)"><h2 class="text-lg font-bold">Kelola Daftar Mata Kuliah</h2>'
@@ -810,8 +825,8 @@ async function kirimKelolaMatkul(ev) {
   setBusy(btn, true, 'Menyimpan…');
   try {
     const baru = await call('api_aturMatkul', list);
-    AppState.tugasAdmin.matkul = baru; closeModal(); toast('Daftar mata kuliah disimpan.');
-    renderAdminTugas();
+    AppState.tugasAdmin.matkul = baru; AppState.matkul = baru; closeModal(); toast('Daftar mata kuliah disimpan.');
+    navigateTo('tugas'); // muat ulang agar pilihan mata kuliah di form unggah ikut berubah
   } catch (e) { setBusy(btn, false); fail(e); }
 }
 
