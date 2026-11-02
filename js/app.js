@@ -38,7 +38,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|publik|agenda)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -97,7 +97,7 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null });
   AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
@@ -1246,6 +1246,220 @@ function kirimGeserPertemuan(jid, tgl, form) {
 }
 function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal: tgl, aksi: 'pulih' }); }
 
+/* ---- Notifikasi WhatsApp & email: tab di Panel Admin (konfigurasi, blast WhatsApp, antrean) ---- */
+const NOTIF_SUB = [['konfig', 'Konfigurasi', 'settings'], ['blast', 'Blast WhatsApp', 'campaign'], ['antrean', 'Antrean', 'inbox']];
+const waktuNotif = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+const notifChip = s => {
+  const m = { Antri: 'bg-amber-100 text-amber-800', Terkirim: 'bg-emerald-100 text-emerald-800', Gagal: 'bg-red-100 text-red-800', Batal: 'bg-slate-200 text-slate-700',
+    Berjalan: 'bg-amber-100 text-amber-800', Selesai: 'bg-emerald-100 text-emerald-800', Dihentikan: 'bg-slate-200 text-slate-700' };
+  return '<span class="chip ' + (m[s] || 'bg-slate-100 text-slate-700') + '">' + esc(s) + '</span>';
+};
+
+async function paintNotifAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  const sub = AppState.notifSub || 'konfig';
+  body.innerHTML = '<div class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Bagian notifikasi">'
+    + NOTIF_SUB.map(s => '<button type="button" class="btn ' + (s[0] === sub ? 'btn-primary' : 'btn-ghost') + ' !min-h-[40px]" aria-pressed="' + (s[0] === sub) + '" onclick="setNotifSub(\'' + s[0] + '\')">'
+      + '<span class="material-symbols-outlined">' + s[2] + '</span>' + s[1] + '</button>').join('') + '</div><div id="notifBody">' + loadingHtml() + '</div>';
+  const masihDi = () => AppState.tab === 'Notifikasi' && (AppState.notifSub || 'konfig') === sub && $('notifBody');
+  try {
+    if (sub === 'konfig') { AppState.notifCfg = await call('api_notifKonfig'); if (masihDi()) renderNotifKonfig(); }
+    else if (sub === 'blast') {
+      const [aud, daftar] = await Promise.all([call('api_notifAudience'), call('api_blastDaftar')]);
+      AppState.notifAud = aud; AppState.blastList = daftar;
+      if (!AppState.blastPilih) AppState.blastPilih = new Set(aud.filter(a => a.valid).map(a => a.id));
+      if (masihDi()) renderNotifBlast();
+    } else { AppState.notifAnt = await call('api_notifAntrean'); if (masihDi()) renderNotifAntrean(); }
+  } catch (e) { if ($('notifBody')) $('notifBody').innerHTML = ''; fail(e); }
+}
+function setNotifSub(s) { AppState.notifSub = s; paintNotifAdmin(); }
+
+/* -- Konfigurasi -- */
+function renderNotifKonfig() {
+  const box = $('notifBody'); if (!box || !AppState.notifCfg) return;
+  const c = AppState.notifCfg, boleh = AppState.isUtama, dis = boleh ? '' : ' disabled';
+  const switchHtml = (id, on, teks) => '<label class="flex cursor-pointer items-center gap-3"><input id="' + id + '" type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"' + (on ? ' checked' : '') + dis + '><span class="font-semibold">' + teks + '</span></label>';
+  const baris = c.matriks.map(m => '<div class="flex flex-col gap-3 border-t border-slate-200 py-3 sm:flex-row sm:items-center">'
+    + '<div class="min-w-0 flex-1"><div class="font-semibold">' + esc(m.label) + '</div><div class="text-xs text-slate-500">Dikirim ke: ' + esc(m.untuk) + '</div></div>'
+    + '<div class="flex items-center gap-5">'
+    + '<label class="flex items-center gap-2 text-sm"><input type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"' + (m.wa ? ' checked' : '') + dis + ' onchange="setMatriksKanal(\'' + m.kode + '\',\'wa\',this.checked)" aria-label="WhatsApp ' + esc(m.label) + '">WhatsApp</label>'
+    + '<label class="flex items-center gap-2 text-sm"><input type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"' + (m.email ? ' checked' : '') + dis + ' onchange="setMatriksKanal(\'' + m.kode + '\',\'email\',this.checked)" aria-label="Email ' + esc(m.label) + '">Email</label>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3"' + dis + ' onclick="bukaEditPesan(\'' + m.kode + '\')" aria-label="Ubah isi pesan ' + esc(m.label) + '"><span class="material-symbols-outlined">edit_note</span>Isi pesan</button>'
+    + '</div></div>').join('');
+  box.innerHTML = (boleh ? '' : '<p class="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Konfigurasi hanya dapat diubah oleh admin utama. Anda tetap bisa melihat antrean dan mengirim blast.</p>')
+    + '<div class="mb-4 rounded-xl p-3 text-sm ' + (c.triggerAktif ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800') + '">'
+    + (c.triggerAktif ? 'Pemicu pengiriman aktif (memeriksa antrean tiap 1 menit).' : 'Pemicu pengiriman belum terpasang. Jalankan fungsi pasangTriggerNotif sekali dari editor Apps Script, lihat panduan.') + '</div>'
+    + (c.linkAda ? '' : '<p class="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">SITE_URL belum diisi, sehingga tautan di pesan akan kosong. Jalankan aturAlamatSitus dari editor.</p>')
+    + '<form onsubmit="simpanNotif(event)" class="space-y-4">'
+    + '<section class="card grid gap-4 p-5 md:grid-cols-2"><h2 class="font-bold md:col-span-2">WhatsApp (Fonnte)</h2>'
+    + '<div class="md:col-span-2">' + switchHtml('ntWa', c.waAktif, 'Aktifkan notifikasi WhatsApp') + '</div>'
+    + '<div class="md:col-span-2"><label class="lbl" for="ntToken">Token Fonnte</label><input id="ntToken" class="inp" type="password" autocomplete="off"' + dis
+    + ' placeholder="' + esc(c.tokenAda ? c.tokenMask + ' (tersimpan, kosongkan bila tidak diganti)' : 'Tempel token dari fonnte.com') + '">'
+    + '<p class="mt-1 text-xs text-slate-500">Token disimpan di server (Script Properties) dan tidak pernah ditampilkan lagi.</p>'
+    + (c.tokenAda && boleh ? '<button type="button" class="btn btn-ghost mt-2 !min-h-[40px] !text-red-700" onclick="simpanNotif(null,true)">Hapus token</button>' : '') + '</div>'
+    + '<div><label class="lbl" for="ntBatch">Ukuran batch blast</label><select id="ntBatch" class="inp"' + dis + '>'
+    + [10, 20, 50].map(b => '<option value="' + b + '"' + (b === c.batch ? ' selected' : '') + '>' + b + ' pesan per putaran</option>').join('') + '</select></div>'
+    + '<div><label class="lbl" for="ntJeda">Jeda antarpesan (detik)</label><input id="ntJeda" class="inp" type="text" inputmode="numeric" value="' + esc(c.jeda) + '"' + dis + ' placeholder="5 atau 3-8">'
+    + '<p class="mt-1 text-xs text-slate-500">Isi satu angka, atau rentang acak seperti 3-8. Jeda yang lebih lama lebih aman dari pemblokiran.</p></div>'
+    + '<div class="flex flex-wrap items-center gap-2 md:col-span-2"><button type="button" class="btn btn-ghost" onclick="cekPerangkatNotif(this)"><span class="material-symbols-outlined">sensors</span>Cek Perangkat</button>'
+    + '<span id="ntDevice" class="text-sm text-slate-600"></span></div>'
+    + '<div class="md:col-span-2"><label class="lbl" for="ntTesWa">Kirim pesan tes</label><div class="flex gap-2"><input id="ntTesWa" class="inp flex-1" type="tel" inputmode="tel" placeholder="Nomor tujuan, contoh 081234567890">'
+    + '<button type="button" class="btn btn-ghost shrink-0" onclick="tesNotif(\'WA\',\'ntTesWa\',this)">Kirim Tes</button></div>'
+    + '<p class="mt-1 text-xs text-slate-500">Tes memakai token yang sudah tersimpan. Simpan konfigurasi dulu bila baru mengganti token.</p></div></section>'
+    + '<section class="card grid gap-4 p-5"><h2 class="font-bold">Email</h2>' + switchHtml('ntEmail', c.emailAktif, 'Aktifkan notifikasi email')
+    + '<p class="text-sm text-slate-600">Sisa kuota email hari ini: <b>' + c.kuotaEmail + '</b> (akun Gmail biasa sekitar 100 per hari).</p>'
+    + '<div><label class="lbl" for="ntTesEmail">Kirim email tes</label><div class="flex gap-2"><input id="ntTesEmail" class="inp flex-1" type="email" placeholder="Alamat email tujuan">'
+    + '<button type="button" class="btn btn-ghost shrink-0" onclick="tesNotif(\'EMAIL\',\'ntTesEmail\',this)">Kirim Tes</button></div></div></section>'
+    + '<section class="card p-5"><h2 class="font-bold">Kejadian yang memicu notifikasi</h2><p class="mb-2 text-sm text-slate-500">Pilih kanal untuk tiap kejadian. Kanal yang saklar utamanya mati tidak akan mengirim.</p>' + baris + '</section>'
+    + (boleh ? '<div><button type="submit" class="btn btn-primary w-full sm:w-auto"><span class="material-symbols-outlined">save</span>Simpan Konfigurasi</button></div>' : '')
+    + '</form>';
+}
+function setMatriksKanal(kode, kanal, nilai) {
+  const m = AppState.notifCfg.matriks.find(x => x.kode === kode); if (m) m[kanal] = !!nilai;
+}
+function bukaEditPesan(kode) {
+  const m = AppState.notifCfg.matriks.find(x => x.kode === kode); if (!m) return;
+  openModal('<form class="p-5" onsubmit="event.preventDefault();simpanEditPesan(\'' + kode + '\')"><h2 class="text-lg font-bold">' + esc(m.label) + '</h2>'
+    + '<p class="mt-1 text-sm text-slate-600">Variabel yang bisa dipakai: <code class="break-all text-xs">' + esc(m.vars) + '</code>. Gunakan *teks* untuk huruf tebal.</p>'
+    + '<div class="mt-3"><label class="lbl" for="epSubjek">Subjek email</label><input id="epSubjek" class="inp" type="text" maxlength="150" value="' + esc(m.subjek) + '"></div>'
+    + '<div class="mt-3"><label class="lbl" for="epPesan">Isi pesan (WhatsApp dan email)</label><textarea id="epPesan" class="inp" rows="8" maxlength="1000" required data-autofocus>' + esc(m.pesan) + '</textarea></div>'
+    + '<div class="mt-5 flex flex-wrap justify-between gap-2"><button type="button" class="btn btn-ghost" onclick="pulihkanPesanBawaan(\'' + kode + '\')">Kembalikan bawaan</button>'
+    + '<div class="flex gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div></div></form>');
+}
+function pulihkanPesanBawaan(kode) {
+  const m = AppState.notifCfg.matriks.find(x => x.kode === kode); if (!m) return;
+  $('epSubjek').value = m.subjekDefault; $('epPesan').value = m.pesanDefault;
+}
+function simpanEditPesan(kode) {
+  const m = AppState.notifCfg.matriks.find(x => x.kode === kode); if (!m) return;
+  m.subjek = $('epSubjek').value.trim() || m.subjekDefault; m.pesan = $('epPesan').value.trim() || m.pesanDefault;
+  closeModal(); toast('Isi pesan diubah. Tekan Simpan Konfigurasi agar berlaku.');
+}
+async function simpanNotif(ev, hapusToken) {
+  if (ev) ev.preventDefault();
+  const c = AppState.notifCfg, matriks = {};
+  c.matriks.forEach(m => { matriks[m.kode] = { wa: m.wa, email: m.email, subjek: m.subjek, pesan: m.pesan }; });
+  const p = { token: hapusToken ? '__HAPUS__' : $('ntToken').value.trim(), waAktif: $('ntWa').checked, emailAktif: $('ntEmail').checked,
+    batch: Number($('ntBatch').value), jeda: $('ntJeda').value.trim(), matriks: matriks };
+  if (hapusToken) p.waAktif = false;
+  const btn = ev ? ev.target.querySelector('[type=submit]') : null;
+  if (btn) setBusy(btn, true, 'Menyimpan…');
+  try { AppState.notifCfg = await call('api_notifSimpan', p); toast(hapusToken ? 'Token dihapus.' : 'Konfigurasi disimpan.'); renderNotifKonfig(); }
+  catch (e) { if (btn) setBusy(btn, false); fail(e); }
+}
+async function cekPerangkatNotif(btn) {
+  const out = $('ntDevice'); setBusy(btn, true, 'Memeriksa…'); out.textContent = '';
+  try {
+    const d = await call('api_notifDevice');
+    out.textContent = 'Nomor ' + d.nomor + ' · ' + (d.status === 'connect' ? 'terhubung' : d.status || 'tidak diketahui') + (d.paket ? ' · paket ' + d.paket : '') + (d.kuota ? ' · kuota ' + d.kuota : '');
+    out.className = 'text-sm ' + (d.status === 'connect' ? 'text-emerald-700' : 'text-amber-700');
+  } catch (e) { out.textContent = ''; fail(e); }
+  setBusy(btn, false);
+}
+async function tesNotif(kanal, inputId, btn) {
+  setBusy(btn, true, 'Mengirim…');
+  try { toast(await call('api_notifUji', { kanal: kanal, tujuan: $(inputId).value.trim() })); }
+  catch (e) { fail(e); }
+  setBusy(btn, false);
+}
+
+/* -- Blast WhatsApp -- */
+function ringkasBlastPilih() {
+  const n = AppState.blastPilih ? AppState.blastPilih.size : 0;
+  return n + ' penerima dipilih';
+}
+function renderNotifBlast() {
+  const box = $('notifBody'); if (!box) return;
+  const aud = AppState.notifAud || [], pilih = AppState.blastPilih || new Set();
+  const cfg = AppState.notifCfg;
+  const daftarAud = aud.length ? aud.map(a => '<label class="flex items-center gap-3 border-t border-slate-200 py-2' + (a.valid ? ' cursor-pointer' : ' opacity-60') + '">'
+    + '<input type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"' + (pilih.has(a.id) ? ' checked' : '') + (a.valid ? '' : ' disabled') + ' onchange="togglePenerima(\'' + a.id + '\',this.checked)">'
+    + '<span class="min-w-0 flex-1 truncate font-medium">' + esc(a.nama) + '</span><span class="text-xs ' + (a.valid ? 'text-slate-500' : 'text-red-700') + '">' + (a.valid ? esc(a.hp) : 'nomor tidak valid') + '</span></label>').join('')
+    : '<p class="py-6 text-center text-slate-500">Belum ada anggota yang disetujui.</p>';
+  const blast = (AppState.blastList || []).length ? AppState.blastList.map(b => '<article class="card p-4"><div class="flex flex-wrap items-center justify-between gap-2">'
+    + '<h3 class="font-bold">' + esc(b.Judul) + '</h3>' + notifChip(b.Status) + '</div>'
+    + '<div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div class="h-2 rounded-full bg-primary" style="width:' + b.Persen + '%"></div></div>'
+    + '<p class="mt-2 text-sm text-slate-600">Terkirim ' + b.Terkirim + (b.Gagal ? ' · gagal ' + b.Gagal : '') + (b.Status === 'Berjalan' ? ' · sisa ' + b.Sisa : '') + ' dari ' + b.Total
+    + ' · batch ' + b.UkuranBatch + ' · jeda ' + esc(b.JedaDetik) + ' dtk · ' + waktuNotif(b.Dibuat) + '</p>'
+    + (b.Status === 'Berjalan' ? '<div class="mt-3 flex flex-wrap gap-2"><button type="button" class="btn btn-primary !min-h-[40px]" onclick="prosesBlast(\'' + b.ID + '\',this)"><span class="material-symbols-outlined">send</span>Kirim batch berikutnya sekarang</button>'
+      + '<button type="button" class="btn btn-ghost !min-h-[40px] !text-red-700" onclick="hentiBlast(\'' + b.ID + '\')"><span class="material-symbols-outlined">stop_circle</span>Hentikan</button></div>'
+      + '<p class="mt-2 text-xs text-slate-500">Server tetap mengirim satu batch tiap menit walau halaman ini ditutup.</p>' : '') + '</article>').join('')
+    : '<p class="rounded-xl bg-white p-6 text-center text-slate-500">Belum ada blast.</p>';
+  box.innerHTML = '<div class="grid gap-6 lg:grid-cols-12"><form class="card space-y-3 p-5 lg:col-span-5" onsubmit="mulaiBlast(event)"><h2 class="font-bold">Tulis Pesan</h2>'
+    + '<div><label class="lbl" for="blJudul">Judul (hanya untuk catatan admin)</label><input id="blJudul" class="inp" type="text" maxlength="80" required placeholder="Contoh: Info kumpul kelompok"></div>'
+    + '<div><label class="lbl" for="blPesan">Isi pesan</label><textarea id="blPesan" class="inp" rows="7" maxlength="1000" required placeholder="Assalamu\'alaikum {nama}, ..."></textarea>'
+    + '<p class="mt-1 text-xs text-slate-500">{nama} diganti nama panggilan tiap penerima. Gunakan *teks* untuk huruf tebal.</p></div>'
+    + '<div class="grid grid-cols-2 gap-3"><div><label class="lbl" for="blBatch">Ukuran batch</label><select id="blBatch" class="inp">'
+    + [10, 20, 50].map(b => '<option value="' + b + '"' + (cfg && cfg.batch === b ? ' selected' : (!cfg && b === 20 ? ' selected' : '')) + '>' + b + '</option>').join('') + '</select></div>'
+    + '<div><label class="lbl" for="blJeda">Jeda (detik)</label><input id="blJeda" class="inp" type="text" inputmode="numeric" value="' + esc(cfg ? cfg.jeda : '5') + '" placeholder="5 atau 3-8"></div></div>'
+    + '<p id="blRingkas" class="text-sm text-slate-600">' + ringkasBlastPilih() + '</p>'
+    + '<button type="submit" class="btn btn-primary w-full"><span class="material-symbols-outlined">campaign</span>Mulai Blast</button>'
+    + '<p class="text-xs text-slate-500">Tips: mulai dari batch 10 dengan jeda acak 5-10 detik, dan jangan mengirim tautan yang sama ke banyak orang dalam waktu singkat.</p></form>'
+    + '<section class="card p-5 lg:col-span-7"><div class="flex flex-wrap items-center justify-between gap-2"><h2 class="font-bold">Pilih Penerima</h2>'
+    + '<div class="flex gap-2"><button type="button" class="btn btn-ghost !min-h-[40px]" onclick="pilihSemuaPenerima(true)">Pilih semua</button><button type="button" class="btn btn-ghost !min-h-[40px]" onclick="pilihSemuaPenerima(false)">Kosongkan</button></div></div>'
+    + '<div id="blAud" class="mt-2 max-h-96 overflow-y-auto">' + daftarAud + '</div></section></div>'
+    + '<h2 class="mb-3 mt-8 font-bold">Riwayat Blast</h2><div class="space-y-3">' + blast + '</div>';
+}
+function togglePenerima(id, on) {
+  if (!AppState.blastPilih) AppState.blastPilih = new Set();
+  if (on) AppState.blastPilih.add(id); else AppState.blastPilih.delete(id);
+  if ($('blRingkas')) $('blRingkas').textContent = ringkasBlastPilih();
+}
+function pilihSemuaPenerima(on) {
+  AppState.blastPilih = new Set(on ? (AppState.notifAud || []).filter(a => a.valid).map(a => a.id) : []);
+  document.querySelectorAll('#blAud input[type=checkbox]:not(:disabled)').forEach(c => { c.checked = on; });
+  if ($('blRingkas')) $('blRingkas').textContent = ringkasBlastPilih();
+}
+async function mulaiBlast(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]');
+  const p = { judul: $('blJudul').value.trim(), pesan: $('blPesan').value.trim(), ukuranBatch: Number($('blBatch').value), jeda: $('blJeda').value.trim(), ids: Array.from(AppState.blastPilih || []) };
+  setBusy(btn, true, 'Menyiapkan…');
+  try { AppState.blastList = await call('api_blastBuat', p); toast('Blast dimulai. Batch pertama dikirim dalam satu menit.'); renderNotifBlast(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+async function prosesBlast(id, btn) {
+  setBusy(btn, true, 'Mengirim…');
+  try { AppState.blastList = await call('api_blastProses', id); renderNotifBlast(); toast('Satu batch diproses.'); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+async function hentiBlast(id) {
+  try { AppState.blastList = await call('api_blastHenti', id); renderNotifBlast(); toast('Blast dihentikan.'); } catch (e) { fail(e); }
+}
+
+/* -- Antrean -- */
+function renderNotifAntrean() {
+  const box = $('notifBody'); if (!box || !AppState.notifAnt) return;
+  const d = AppState.notifAnt, f = AppState.antreanFilter || '';
+  const rows = d.rows.filter(r => !f || r.Status === f);
+  const kpi = ['Antri', 'Terkirim', 'Gagal', 'Batal'].map(s => '<div class="card p-3 text-center"><div class="text-2xl font-extrabold leading-none">' + d.ringkas[s] + '</div><div class="mt-1 text-xs text-slate-500">' + s + '</div></div>').join('');
+  const daftar = rows.length ? rows.map(r => '<article class="card flex items-start gap-3 p-3"><span class="material-symbols-outlined mt-0.5 text-primary">' + (r.Kanal === 'EMAIL' ? 'mail' : 'chat') + '</span>'
+    + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="truncate font-semibold">' + esc(r.Nama || r.Tujuan) + '</span>' + notifChip(r.Status)
+    + '<span class="text-xs text-slate-500">' + esc(r.Event || '') + ' · ' + waktuNotif(r.Dibuat) + '</span></div>'
+    + '<p class="truncate text-sm text-slate-600">' + esc(r.Tujuan) + ' · ' + esc(String(r.Pesan).replace(/\n/g, ' ')) + '</p>'
+    + (r.Status === 'Gagal' || r.Status === 'Batal' ? '<p class="text-xs text-red-700">' + esc(r.Respon) + '</p>' : '') + '</div></article>').join('')
+    : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">inbox</span><p class="mt-2">Tidak ada pesan pada daftar ini.</p></div>';
+  box.innerHTML = '<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">' + kpi + '</div>'
+    + '<div class="mb-4 flex flex-wrap items-center gap-2"><label class="sr-only" for="antFilter">Saring status</label>'
+    + '<select id="antFilter" class="inp !w-auto" onchange="AppState.antreanFilter=this.value;renderNotifAntrean()">'
+    + [['', 'Semua status'], ['Antri', 'Antri'], ['Terkirim', 'Terkirim'], ['Gagal', 'Gagal'], ['Batal', 'Batal']].map(o => '<option value="' + o[0] + '"' + (o[0] === f ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>'
+    + '<button type="button" class="btn btn-primary !min-h-[44px]" onclick="prosesAntreanSekarang(this)"><span class="material-symbols-outlined">send</span>Proses Sekarang</button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[44px]" onclick="ulangiGagal(this)"><span class="material-symbols-outlined">replay</span>Ulangi yang Gagal</button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[44px]" onclick="paintNotifAdmin()"><span class="material-symbols-outlined">refresh</span>Muat ulang</button></div>'
+    + '<p class="mb-3 text-xs text-slate-500">Menampilkan 200 pesan terakhir · sisa kuota email hari ini ' + d.kuotaEmail + '.</p>'
+    + '<div class="space-y-2">' + daftar + '</div>';
+}
+async function prosesAntreanSekarang(btn) {
+  setBusy(btn, true, 'Memproses…');
+  try { const r = await call('api_notifProses'); toast('Terkirim ' + r.terkirim + ', gagal ' + r.gagal + (r.sisa > 0 ? ', sisa ' + r.sisa : '') + '.'); await paintNotifAdmin(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+async function ulangiGagal(btn) {
+  setBusy(btn, true, 'Menyiapkan…');
+  try { const n = await call('api_notifUlang'); toast(n ? n + ' pesan diantre ulang.' : 'Tidak ada pesan gagal.'); await paintNotifAdmin(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+
 /* ---- Panel admin ---- */
 pages.admin = async () => {
   if (!AppState.isAdmin) return lockedHtml('Halaman ini khusus admin.');
@@ -1257,14 +1471,14 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengingat', 'Profil', 'Jadwal'];
-  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah' };
+  const tabs = ['Menunggu', 'Semua', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (['Pengingat', 'Profil', 'Jadwal'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="relative w-full sm:w-72' + (['Pengingat', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
@@ -1273,6 +1487,7 @@ function paintAdmin() {
   if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
   if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
   if (AppState.tab === 'Jadwal') { paintJadwalAdmin(); return; }
+  if (AppState.tab === 'Notifikasi') { paintNotifAdmin(); return; }
   const q = (AppState.q || '').toLowerCase().trim();
   let rows = AppState.adminData.rows.filter(r => (AppState.tab === 'Semua' || r.Status === 'Menunggu')
     && (!q || [r.NamaLengkap, r.NamaPanggilan, r.NIM, r.Email, r.TempatKerja].join(' ').toLowerCase().includes(q)));
