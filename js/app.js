@@ -38,7 +38,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -97,7 +97,7 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null });
   AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
@@ -455,13 +455,15 @@ pages.beranda = async () => {
   const s = AppState.me && AppState.me.Status;
   const anggota = !!(AppState.token && isApproved());
   // Data publik dan pengingat dimuat bersamaan; satu yang gagal tidak menghalangi Beranda.
-  const [rPub, rAgenda, rPeng] = await Promise.allSettled([
-    api('api_publik'), api('api_agenda', ''), anggota ? call('api_pengingat') : Promise.resolve(null)
+  const [rPub, rAgenda, rPeng, rPeng2] = await Promise.allSettled([
+    api('api_publik'), api('api_agenda', ''), anggota ? call('api_pengingat') : Promise.resolve(null),
+    anggota ? call('api_pengumuman') : Promise.resolve(null)
   ]);
   if (rPeng.status === 'rejected' && rPeng.reason && rPeng.reason.message === 'SESI_HABIS') throw rPeng.reason;
   AppState.publik = rPub.status === 'fulfilled' ? rPub.value : null;
   AppState.agenda.pub = rAgenda.status === 'fulfilled' ? rAgenda.value : null;
   AppState.pengingat = rPeng.status === 'fulfilled' ? rPeng.value : null;
+  AppState.pengumuman = rPeng2.status === 'fulfilled' ? rPeng2.value : null;
   const pengHtml = anggota && AppState.pengingat ? pengingatDashboardHtml(AppState.pengingat) : '';
 
   const pesan = { Menunggu: 'Biodata Anda sedang menunggu persetujuan admin.', Disetujui: 'Biodata Anda sudah disetujui. Silakan kenali teman sekelas.', Ditolak: 'Biodata Anda perlu diperbaiki. Lihat catatan admin.' };
@@ -483,6 +485,7 @@ pages.beranda = async () => {
     + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
     + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
     + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
+    + (anggota ? pengumumanHtml(AppState.pengumuman) : '')
     + pengHtml
     + (P ? sambutanHtml(P) + visiMisiHtml(P) + strukturHtml(P) : '')
     + agendaSectionHtml(AppState.agenda.pub)
@@ -1246,6 +1249,84 @@ function kirimGeserPertemuan(jid, tgl, form) {
 }
 function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal: tgl, aksi: 'pulih' }); }
 
+/* ---- Pengumuman kelas: kartu di Beranda (anggota) dan tab di Panel Admin ---- */
+function pengumumanHtml(list) {
+  if (!list || (!list.length && !AppState.isAdmin)) return ''; // anggota tidak perlu melihat bagian kosong
+  const kartu = list.map(p => '<article class="card p-4' + (p.Penting ? ' bg-red-50/60 ring-2 ring-red-300' : '') + '">'
+    + '<div class="flex flex-wrap items-center gap-2">'
+    + (p.Penting ? '<span class="chip bg-red-100 text-red-700"><span class="material-symbols-outlined !text-sm">priority_high</span>Penting</span>' : '')
+    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Berakhir ? ' · sampai ' + esc(tglSingkat(p.Berakhir)) : '') + '</span></div>'
+    + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
+    + '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p></article>').join('');
+  return '<section class="mt-6" aria-label="Pengumuman"><div class="mb-3 flex items-center justify-between gap-3">'
+    + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">campaign</span>Pengumuman</h2>'
+    + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[36px]" onclick="bukaPengumumanAdmin()"><span class="material-symbols-outlined">edit_note</span>Kelola</button>' : '') + '</div>'
+    + (list.length ? '<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">' + kartu + '</div>'
+      : '<div class="card p-6 text-center text-sm text-slate-500">Belum ada pengumuman. Tekan Kelola untuk menulis pengumuman pertama.</div>') + '</section>';
+}
+function bukaPengumumanAdmin() { AppState.tab = 'Pengumuman'; AppState.pengumumanAdm = null; navigateTo('admin'); }
+
+async function paintPengumumanAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  body.innerHTML = loadingHtml();
+  try {
+    if (!AppState.pengumumanAdm) AppState.pengumumanAdm = await call('api_pengumumanAdmin');
+    if (AppState.tab === 'Pengumuman') renderPengumumanAdmin();
+  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
+}
+function renderPengumumanAdmin() {
+  const body = $('adminBody'); if (!body || !AppState.pengumumanAdm) return;
+  const rows = AppState.pengumumanAdm.rows;
+  const form = '<form id="frmPengumuman" class="card mb-4 grid gap-3 p-5" onsubmit="kirimPengumuman(event)"><input type="hidden" id="pgId" value="">'
+    + '<h2 id="pgJudulForm" class="font-bold">Tulis Pengumuman</h2>'
+    + '<div><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="120" required placeholder="Contoh: Kumpul kelompok Sabtu"></div>'
+    + '<div><label class="lbl" for="pgIsi">Isi pengumuman</label><textarea id="pgIsi" class="inp" rows="5" maxlength="1500" required placeholder="Tulis info yang perlu diketahui teman sekelas"></textarea></div>'
+    + '<div class="grid gap-3 sm:grid-cols-2"><div><label class="lbl" for="pgBerakhir">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
+    + '<p class="mt-1 text-xs text-slate-500">Setelah tanggal ini lewat, pengumuman hilang dari Beranda. Kosongkan bila tidak ada batas.</p></div>'
+    + '<label class="flex cursor-pointer items-center gap-3 self-start pt-2 sm:pt-7"><input id="pgPenting" type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"><span class="font-semibold">Tandai penting</span></label></div>'
+    + '<div class="flex flex-wrap gap-2"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">campaign</span><span id="pgTombol">Terbitkan</span></button>'
+    + '<button type="button" id="pgBatalUbah" class="btn btn-ghost hidden" onclick="batalUbahPengumuman()">Batal ubah</button></div>'
+    + '<p class="text-xs text-slate-500">Pengumuman hanya terlihat oleh anggota yang sudah login. Tidak dikirim lewat WhatsApp atau email.</p></form>';
+  const daftar = rows.length ? rows.map(p => '<article class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start' + (p.Aktif ? '' : ' opacity-70') + '">'
+    + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">'
+    + (p.Penting ? '<span class="chip bg-red-100 text-red-700">Penting</span>' : '')
+    + (p.Aktif ? '<span class="chip bg-emerald-100 text-emerald-800">Tampil</span>' : '<span class="chip bg-slate-200 text-slate-700">Sudah berakhir</span>')
+    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Berakhir ? ' · berakhir ' + esc(tglSingkat(p.Berakhir)) : ' · tanpa batas') + '</span></div>'
+    + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
+    + '<p class="mt-1 line-clamp-3 whitespace-pre-line text-sm text-slate-600">' + esc(p.Isi) + '</p></div>'
+    + '<div class="flex shrink-0 gap-2"><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahPengumuman(\'' + p.ID + '\')" aria-label="Ubah ' + esc(p.Judul) + '"><span class="material-symbols-outlined">edit</span></button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengumuman(\'' + p.ID + '\')" aria-label="Hapus ' + esc(p.Judul) + '"><span class="material-symbols-outlined">delete</span></button></div></article>').join('')
+    : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">campaign</span><p class="mt-2">Belum ada pengumuman.</p></div>';
+  body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>';
+}
+function ubahPengumuman(id) {
+  const p = AppState.pengumumanAdm.rows.find(x => x.ID === id); if (!p) return;
+  $('pgId').value = p.ID; $('pgJudul').value = p.Judul; $('pgIsi').value = p.Isi;
+  $('pgBerakhir').value = p.Berakhir || ''; $('pgPenting').checked = !!p.Penting;
+  $('pgJudulForm').textContent = 'Ubah Pengumuman'; $('pgTombol').textContent = 'Simpan Perubahan'; $('pgBatalUbah').classList.remove('hidden');
+  $('frmPengumuman').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('pgJudul').focus();
+}
+function batalUbahPengumuman() { renderPengumumanAdmin(); }
+async function kirimPengumuman(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]');
+  const p = { id: $('pgId').value, judul: $('pgJudul').value.trim(), isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked, berakhir: $('pgBerakhir').value };
+  const ubah = !!p.id;
+  setBusy(btn, true, 'Menyimpan…');
+  try { AppState.pengumumanAdm = await call('api_simpanPengumuman', p); toast(ubah ? 'Pengumuman diperbarui.' : 'Pengumuman diterbitkan.'); renderPengumumanAdmin(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+function konfirmasiHapusPengumuman(id) {
+  openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-red-100 text-red-700"><span class="material-symbols-outlined">delete_forever</span></span>'
+    + '<div><h2 class="text-lg font-bold">Hapus pengumuman?</h2><p class="text-sm text-slate-600">Pengumuman akan hilang dari Beranda semua anggota. Tindakan ini tidak dapat dibatalkan.</p></div></div>'
+    + '<div class="mt-5 flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()" data-autofocus>Batal</button>'
+    + '<button class="btn btn-danger" onclick="hapusPengumuman(\'' + id + '\')">Ya, hapus</button></div></div>');
+}
+async function hapusPengumuman(id) {
+  try { AppState.pengumumanAdm = await call('api_hapusPengumuman', id); closeModal(); toast('Pengumuman dihapus.'); renderPengumumanAdmin(); }
+  catch (e) { closeModal(); fail(e); }
+}
+
 /* ---- Notifikasi WhatsApp & email: tab di Panel Admin (konfigurasi, blast WhatsApp, antrean) ---- */
 const NOTIF_SUB = [['konfig', 'Konfigurasi', 'settings'], ['blast', 'Blast WhatsApp', 'campaign'], ['antrean', 'Antrean', 'inbox']];
 const waktuNotif = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); };
@@ -1471,19 +1552,20 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'];
-  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
+  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (['Pengingat', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
 function setTab(t) { AppState.tab = t; AppState.q = ''; $('app-container').innerHTML = adminHtml(); paintAdmin(); }
 function paintAdmin() {
+  if (AppState.tab === 'Pengumuman') { paintPengumumanAdmin(); return; }
   if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
   if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
   if (AppState.tab === 'Jadwal') { paintJadwalAdmin(); return; }
