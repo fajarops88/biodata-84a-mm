@@ -457,7 +457,7 @@ pages.beranda = async () => {
   // Data publik dan pengingat dimuat bersamaan; satu yang gagal tidak menghalangi Beranda.
   const [rPub, rAgenda, rPeng, rPeng2] = await Promise.allSettled([
     api('api_publik'), api('api_agenda', ''), anggota ? call('api_pengingat') : Promise.resolve(null),
-    anggota ? call('api_pengumuman') : Promise.resolve(null)
+    api('api_pengumuman') // pengumuman terbuka untuk umum (tanpa login)
   ]);
   if (rPeng.status === 'rejected' && rPeng.reason && rPeng.reason.message === 'SESI_HABIS') throw rPeng.reason;
   AppState.publik = rPub.status === 'fulfilled' ? rPub.value : null;
@@ -485,7 +485,7 @@ pages.beranda = async () => {
     + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
     + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
     + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
-    + (anggota ? pengumumanHtml(AppState.pengumuman) : '')
+    + pengumumanHtml(AppState.pengumuman)
     + pengHtml
     + (P ? sambutanHtml(P) + visiMisiHtml(P) + strukturHtml(P) : '')
     + agendaSectionHtml(AppState.agenda.pub)
@@ -1303,7 +1303,7 @@ function renderPengumumanAdmin() {
     + '<label class="flex cursor-pointer items-center gap-3 self-start pt-2 sm:pt-7"><input id="pgPenting" type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"><span class="font-semibold">Tandai penting</span></label></div>'
     + '<div class="flex flex-wrap gap-2"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">campaign</span><span id="pgTombol">Terbitkan</span></button>'
     + '<button type="button" id="pgBatalUbah" class="btn btn-ghost hidden" onclick="batalUbahPengumuman()">Batal ubah</button></div>'
-    + '<p class="text-xs text-slate-500">Pengumuman hanya terlihat oleh anggota yang sudah login. Tidak dikirim lewat WhatsApp atau email.</p></form>';
+    + '<p class="text-xs text-slate-500">Pengumuman tampil untuk umum di Beranda, siapa saja bisa membacanya tanpa login. Jangan menulis info rahasia (nomor HP, kata sandi, tautan grup). Tidak dikirim lewat WhatsApp atau email.</p></form>';
   const daftar = rows.length ? rows.map(p => '<article class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start' + (p.Aktif ? '' : ' opacity-70') + '">'
     + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">'
     + (p.Penting ? '<span class="chip bg-red-100 text-red-700">Penting</span>' : '')
