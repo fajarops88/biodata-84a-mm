@@ -1031,16 +1031,22 @@ function hitungMundur(iso) {
   const teks = hari <= 0 ? 'Hari ini, ' + (jam >= 1 ? jam + ' jam lagi' : menit + ' menit lagi') : hari === 1 ? 'Besok' : hari + ' hari lagi';
   return { teks: teks, urgent: selisih < 3 * 86400000 };
 }
+/* Tugas ber-tanggal-berakhir: hitung mundur ke akhir hari berakhir (23.59 WITA), bukan ke waktu mulai. */
+const targetPeng = p => (p.Jenis === 'Tugas' && p.Berakhir) ? p.Berakhir + 'T23:59:00+08:00' : p.Waktu;
+const tglBerakhir = ymd => new Date(ymd + 'T12:00:00+08:00').toLocaleDateString('id-ID', { timeZone: WITA, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+function waktuPengText(p) {
+  return (p.Jenis === 'Tugas' && p.Berakhir) ? 'Mulai ' + fmtWaktu(p.Waktu) + ' · berakhir ' + tglBerakhir(p.Berakhir) : fmtWaktu(p.Waktu);
+}
 function pengingatDashboardHtml(list) {
   const kartu = list.map(p => {
-    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, m = hitungMundur(p.Waktu);
+    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, m = hitungMundur(targetPeng(p));
     return '<article class="card flex items-start gap-3 p-4' + (m.urgent ? ' ring-2 ring-red-300' : '') + '">'
       + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
       + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
       + (m.urgent ? '<span class="chip bg-red-100 text-red-700">Segera</span>' : '') + '</div>'
       + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
       + (p.MataKuliah ? '<p class="text-sm text-slate-600">' + esc(p.MataKuliah) + '</p>' : '')
-      + '<p class="text-xs text-slate-500">' + esc(fmtWaktu(p.Waktu)) + '</p>'
+      + '<p class="text-xs text-slate-500">' + esc(waktuPengText(p)) + '</p>'
       + (p.Catatan ? '<p class="mt-1 text-sm text-slate-600">' + esc(p.Catatan) + '</p>' : '') + '</div>'
       + '<div class="shrink-0 text-right text-sm font-bold ' + (m.urgent ? 'text-red-700' : 'text-primary') + '">' + esc(m.teks) + '</div></article>';
   }).join('');
@@ -1067,31 +1073,42 @@ function renderPengingatAdmin() {
   const opsiMk = '<option value="">Umum (semua mata kuliah)</option>' + d.matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
   const opsiJenis = ['Kuliah', 'Tugas', 'UTS', 'UAS'].map(j => '<option value="' + j + '">' + j + '</option>').join('');
   const form = '<form class="card mb-4 grid gap-3 p-5 md:grid-cols-2" onsubmit="kirimPengingat(event)"><h2 class="font-bold md:col-span-2">Tambah Pengingat</h2>'
-    + '<div><label class="lbl" for="pgJenis">Jenis</label><select id="pgJenis" class="inp" required>' + opsiJenis + '</select></div>'
+    + '<div><label class="lbl" for="pgJenis">Jenis</label><select id="pgJenis" class="inp" required onchange="aturFormPengingat()">' + opsiJenis + '</select></div>'
     + '<div><label class="lbl" for="pgMatkul">Mata kuliah</label><select id="pgMatkul" class="inp">' + opsiMk + '</select></div>'
     + '<div class="md:col-span-2"><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="150" required placeholder="Contoh: UTS Manajemen Keuangan"></div>'
-    + '<div><label class="lbl" for="pgWaktu">Tanggal dan jam (WITA)</label><input id="pgWaktu" class="inp" type="datetime-local" required></div>'
+    + '<div><label class="lbl" for="pgWaktu" id="pgWaktuLbl">Tanggal dan jam (WITA)</label><input id="pgWaktu" class="inp" type="datetime-local" required></div>'
+    + '<div id="pgBerakhirBox" class="hidden"><label class="lbl" for="pgBerakhir">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
+    + '<p class="mt-1 text-xs text-slate-500">Tugas tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.</p></div>'
     + '<div><label class="lbl" for="pgCatatan">Catatan (opsional)</label><input id="pgCatatan" class="inp" type="text" maxlength="300" placeholder="Contoh: Ruang 3.2, bawa kalkulator"></div>'
     + '<div class="md:col-span-2"><button type="submit" class="btn btn-primary w-full sm:w-auto"><span class="material-symbols-outlined">add_alert</span>Simpan Pengingat</button></div></form>';
   const daftar = d.rows.length ? d.rows.map(p => {
-    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, lewat = Date.parse(p.Waktu) < kini;
+    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, lewat = Date.parse(targetPeng(p)) < kini;
     return '<article class="card flex items-center gap-3 p-4' + (lewat ? ' opacity-60' : '') + '">'
       + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
       + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
       + (lewat ? '<span class="chip bg-slate-100 text-slate-600">Sudah lewat</span>' : '') + '</div>'
       + '<h3 class="truncate font-bold">' + esc(p.Judul) + '</h3>'
-      + '<p class="truncate text-xs text-slate-500">' + esc(fmtWaktu(p.Waktu)) + (p.MataKuliah ? ' · ' + esc(p.MataKuliah) : '') + '</p></div>'
+      + '<p class="text-xs text-slate-500">' + esc(waktuPengText(p)) + (p.MataKuliah ? ' · ' + esc(p.MataKuliah) : '') + '</p></div>'
       + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengingat(\'' + p.ID + '\')" aria-label="Hapus pengingat"><span class="material-symbols-outlined">delete</span></button></article>';
   }).join('') : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">notifications_off</span><p class="mt-2">Belum ada pengingat. Tambahkan jadwal kuliah, tenggat tugas, UTS, atau UAS.</p></div>';
   body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>'
-    + '<p class="mt-3 text-xs text-slate-400">Beranda hanya menampilkan pengingat yang waktunya belum lewat dan jatuh dalam 14 hari ke depan.</p>';
+    + '<p class="mt-3 text-xs text-slate-400">Beranda hanya menampilkan pengingat yang waktunya belum lewat dan jatuh dalam 14 hari ke depan. Tugas ber-tanggal-berakhir tampil sampai akhir tanggal berakhir.</p>';
+}
+/** Isian tanggal berakhir hanya muncul untuk jenis Tugas; label waktu menjadi "mulai tampil". */
+function aturFormPengingat() {
+  const tugas = $('pgJenis') && $('pgJenis').value === 'Tugas';
+  const box = $('pgBerakhirBox'); if (!box) return;
+  box.classList.toggle('hidden', !tugas);
+  if (!tugas && $('pgBerakhir')) $('pgBerakhir').value = '';
+  $('pgWaktuLbl').textContent = tugas ? 'Tanggal dan jam mulai (WITA)' : 'Tanggal dan jam (WITA)';
 }
 async function kirimPengingat(ev) {
   ev.preventDefault();
   const btn = ev.target.querySelector('[type=submit]');
   const w = $('pgWaktu').value;
   if (!w) return toast('Tanggal dan jam wajib diisi.', 'error');
-  const p = { jenis: $('pgJenis').value, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), waktu: w + ':00+08:00', catatan: $('pgCatatan').value.trim() };
+  const p = { jenis: $('pgJenis').value, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), waktu: w + ':00+08:00', catatan: $('pgCatatan').value.trim(),
+    berakhir: $('pgJenis').value === 'Tugas' ? $('pgBerakhir').value : '' };
   setBusy(btn, true, 'Menyimpan…');
   try { AppState.pengAdmin = await call('api_tambahPengingat', p); toast('Pengingat ditambahkan.'); renderPengingatAdmin(); }
   catch (e) { setBusy(btn, false); fail(e); }
