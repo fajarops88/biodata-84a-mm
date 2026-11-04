@@ -12,7 +12,8 @@ const AppState = {
   page: 'beranda', tab: 'Menunggu', q: '', fotoData: null, editId: null,
   chatMessages: [], chatUnread: 0,
   kuliahTab: 'chat', materi: null, materiFilter: '', pengingat: null, pengAdmin: null,
-  publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null
+  publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null,
+  pasar: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, pasarF: { jenis: '', kat: '', q: '' }, etCtx: 'saya', etFoto: { lama: [], baru: [] }
 };
 
 const $ = id => document.getElementById(id);
@@ -38,7 +39,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean|pasar|pasarKontak|pasarSaya|pasarAdmin)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -97,7 +98,7 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null, pasarKontak: null, pasarSaya: null, pasarAdm: null });
   AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
@@ -283,7 +284,7 @@ const lockedHtml = (msg, aksi) => '<div class="card mx-auto max-w-lg p-8 text-ce
 
 /* ---------- Router SPA ---------- */
 function navItems() {
-  const it = [{ id: 'beranda', icon: 'home', label: 'Beranda' }];
+  const it = [{ id: 'beranda', icon: 'home', label: 'Beranda' }, { id: 'pasar', icon: 'storefront', label: 'Pasar' }];
   if (AppState.token && isApproved()) it.push({ id: 'teman', icon: 'groups', label: 'Daftar Teman' });
   if (AppState.token && isApproved()) it.push({ id: 'kuliah', icon: 'menu_book', label: 'Kuliah', badge: true });
   it.push({ id: 'formulir', icon: 'badge', label: AppState.me ? 'Biodata Saya' : 'Isi Biodata' });
@@ -481,7 +482,8 @@ pages.beranda = async () => {
   return '<section class="card overflow-hidden"><div class="h-1.5 bg-gradient-to-r from-primary via-emerald-600 to-gold"></div>'
     + '<div class="grid items-center gap-8 p-6 md:p-10 lg:grid-cols-12"><div class="' + (AppState.token ? 'lg:col-span-7' : 'lg:col-span-12') + '">'
     + '<span class="chip bg-gold-soft text-amber-800"><span class="material-symbols-outlined !text-base">school</span>Magister Manajemen · Unissula</span>'
-    + '<h1 class="mt-4 text-3xl font-extrabold tracking-tight text-primary-dark md:text-4xl">Biodata &amp; Perkenalan Teman Sekelas</h1>'
+    + '<h1 class="mt-4 text-3xl font-extrabold tracking-tight text-primary-dark md:text-4xl">Portal Kelas 84A MM</h1>'
+    + '<p class="mt-1 font-semibold text-amber-800">Biodata · Agenda · Kuliah · Pasar</p>'
     + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
     + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
     + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
@@ -496,7 +498,7 @@ pages.beranda = async () => {
 /* ---- Jendela Masuk (tombol di pojok kanan atas header) ---- */
 function bukaLogin() {
   const wa = AppState.stats.waBantuan
-    ? '<a class="btn btn-ghost mt-2 w-full !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan masuk ke ' + (AppState.stats.title || 'Biodata Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Lupa PIN? Hubungi Admin</a>' : '';
+    ? '<a class="btn btn-ghost mt-2 w-full !text-emerald-700" target="_blank" rel="noopener" href="https://wa.me/' + waNum(AppState.stats.waBantuan) + '?text=' + encodeURIComponent('Halo, saya butuh bantuan masuk ke ' + (AppState.stats.title || 'Portal Kelas 84A MM')) + '"><span class="material-symbols-outlined">support_agent</span>Lupa PIN? Hubungi Admin</a>' : '';
   openModal('<div class="p-5"><div class="mb-4 flex items-start justify-between gap-3"><div><h2 class="text-lg font-bold">Masuk</h2>'
     + '<p class="text-sm text-slate-500">Gunakan email dan PIN yang Anda buat saat mendaftar.</p></div>'
     + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="closeModal()" aria-label="Tutup"><span class="material-symbols-outlined">close</span></button></div>'
@@ -543,11 +545,11 @@ pages.formulir = async o => {
 };
 after.formulir = () => { const t = $('f_Perkenalan'); if (t) $('cnt').textContent = t.value.length + '/1000'; };
 
-function compressImage(file) {
+function compressImage(file, maxSisi) {
   return new Promise((ok, no) => {
     const img = new Image(), url = URL.createObjectURL(file);
     img.onload = () => {
-      const s = Math.min(1, 640 / Math.max(img.width, img.height));
+      const s = Math.min(1, (maxSisi || 640) / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -1558,6 +1560,258 @@ async function ulangiGagal(btn) {
   catch (e) { setBusy(btn, false); fail(e); }
 }
 
+/* ---- Pasar Kelas (etalase produk & jasa anggota; daftar terbuka untuk umum) ---- */
+const hargaPasar = h => {
+  h = String(h || '').trim();
+  if (!h) return 'Hubungi penjual';
+  return /^\d+$/.test(h) ? 'Rp ' + Number(h).toLocaleString('id-ID') : h;
+};
+const hariLaluPasar = iso => {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const n = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  if (n === 0) return 'Diperbarui hari ini';
+  if (n === 1) return 'Diperbarui kemarin';
+  if (n < 30) return 'Diperbarui ' + n + ' hari lalu';
+  return 'Diperbarui ' + Math.floor(n / 30) + ' bulan lalu';
+};
+const fotoPasarHtml = (it, cls) => it.Foto && it.Foto.length
+  ? '<img src="' + esc(it.Foto[0]) + '" alt="' + esc(it.Judul) + '" loading="lazy" referrerpolicy="no-referrer" class="' + cls + ' w-full object-cover">'
+  : '<div class="' + cls + ' grid w-full place-items-center bg-primary-soft text-3xl font-extrabold text-primary" aria-hidden="true">' + esc(initials(it.Judul)) + '</div>';
+
+pages.pasar = async () => {
+  const ambilKontak = AppState.token && isApproved() ? call('api_pasarKontak').catch(() => ({})) : Promise.resolve(null);
+  const [d, k] = await Promise.all([api('api_pasar'), ambilKontak]);
+  AppState.pasar = d; AppState.pasarKontak = k;
+  return pasarHtml();
+};
+function pasarFiltered() {
+  const f = AppState.pasarF, q = (f.q || '').toLowerCase().trim();
+  return AppState.pasar.items.filter(i => (!f.jenis || i.Jenis === f.jenis) && (!f.kat || i.Kategori === f.kat)
+    && (!q || [i.Judul, i.Deskripsi, i.Nama, i.Kategori].join(' ').toLowerCase().includes(q)));
+}
+function pasarHtml() {
+  const P = AppState.pasar, f = AppState.pasarF;
+  const pil = (v, label) => '<button type="button" class="nav-btn ' + (f.jenis === v ? 'active' : '') + '" aria-pressed="' + (f.jenis === v) + '" onclick="setFilterPasar(\'' + v + '\')">' + label + '</button>';
+  return '<div class="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h1 class="text-2xl font-extrabold text-primary-dark">Pasar Kelas</h1>'
+    + '<p class="text-sm text-slate-500">Produk dan jasa buatan teman sekelas. Dagang antar teman, saling dukung.</p></div>'
+    + (AppState.token && isApproved() ? '<button type="button" class="btn btn-primary" onclick="navigateTo(\'pasarSaya\')"><span class="material-symbols-outlined">storefront</span>Etalase Saya</button>'
+      : '<button type="button" class="btn btn-ghost" onclick="' + (AppState.token ? 'navigateTo(\'formulir\')' : 'bukaLogin()') + '"><span class="material-symbols-outlined">add_business</span>Ingin berjualan? ' + (AppState.token ? 'Lengkapi biodata' : 'Masuk') + '</button>') + '</div>'
+    + '<div class="mb-4 grid gap-3 md:grid-cols-12"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1 md:col-span-4" role="group">' + pil('', 'Semua') + pil('Produk', 'Produk') + pil('Jasa', 'Jasa') + '</div>'
+    + '<div class="md:col-span-4"><label class="sr-only" for="pasarKat">Kategori</label><select id="pasarKat" class="inp" onchange="AppState.pasarF.kat=this.value;paintPasar()"><option value="">Semua kategori</option>'
+    + P.kategori.map(k => '<option value="' + esc(k) + '"' + (f.kat === k ? ' selected' : '') + '>' + esc(k) + '</option>').join('') + '</select></div>'
+    + '<div class="relative md:col-span-4"><label class="sr-only" for="pasarQ">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<input id="pasarQ" class="inp pl-10" type="search" placeholder="Cari produk, jasa, atau penjual…" value="' + esc(f.q) + '" oninput="AppState.pasarF.q=this.value;paintPasar()"></div></div>'
+    + '<div id="pasarBody"></div>'
+    + '<p class="mt-6 text-xs text-slate-500">Transaksi menjadi tanggung jawab penjual dan pembeli. Tidak ada pembayaran lewat aplikasi ini. Lihat sesuatu yang tidak pantas? Tekan Laporkan (khusus anggota yang sudah masuk).</p>';
+}
+after.pasar = () => paintPasar();
+function setFilterPasar(v) { AppState.pasarF.jenis = v; $('app-container').innerHTML = pasarHtml(); paintPasar(); }
+function kontakPasar(it) {
+  const nomor = it.Wa || (AppState.pasarKontak && AppState.pasarKontak[it.ID]) || '';
+  if (nomor) {
+    const pesan = 'Halo ' + it.Nama + ', saya lihat "' + it.Judul + '" di Pasar ' + (AppState.stats.title || 'Portal Kelas') + '. Apakah masih tersedia?';
+    return '<a class="btn btn-primary w-full" target="_blank" rel="noopener" href="https://wa.me/' + esc(nomor) + '?text=' + encodeURIComponent(pesan) + '"><span class="material-symbols-outlined">chat</span>Hubungi via WhatsApp</a>';
+  }
+  if (!AppState.token) return '<button type="button" class="btn btn-ghost w-full" onclick="closeModal();bukaLogin()"><span class="material-symbols-outlined">login</span>Masuk untuk menghubungi penjual</button>';
+  if (!isApproved()) return '<p class="text-center text-xs text-slate-500">Kontak penjual tersedia setelah biodata Anda disetujui admin.</p>';
+  return '<p class="text-center text-xs text-slate-500">Penjual belum mencantumkan kontak.</p>';
+}
+function paintPasar() {
+  const body = $('pasarBody'); if (!body || !AppState.pasar) return;
+  const list = pasarFiltered();
+  if (!list.length) { body.innerHTML = '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">storefront</span><p class="mt-2">'
+    + (AppState.pasar.items.length ? 'Tidak ada etalase yang cocok dengan pencarian.' : 'Belum ada etalase. Jadilah yang pertama berjualan di sini.') + '</p></div>'; return; }
+  body.innerHTML = '<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + list.map(it => '<article class="card flex flex-col overflow-hidden' + (it.Status === 'Tersedia' ? '' : ' opacity-70') + '">'
+    + '<button type="button" class="block text-left" onclick="bukaDetailPasar(\'' + it.ID + '\')" aria-label="Lihat ' + esc(it.Judul) + '">' + fotoPasarHtml(it, 'h-40') + '</button>'
+    + '<div class="flex flex-1 flex-col gap-2 p-4"><div class="flex flex-wrap items-center gap-2"><span class="chip bg-primary-soft text-primary">' + esc(it.Jenis) + '</span>'
+    + (it.Status === 'Tersedia' ? '' : '<span class="chip bg-slate-200 text-slate-700">Tidak tersedia</span>') + '<span class="truncate text-xs text-slate-500">' + esc(it.Kategori) + '</span></div>'
+    + '<h2 class="font-bold leading-tight">' + esc(it.Judul) + '</h2>'
+    + '<p class="font-extrabold text-primary">' + esc(hargaPasar(it.Harga)) + '</p>'
+    + '<p class="line-clamp-3 whitespace-pre-line text-sm text-slate-600">' + esc(it.Deskripsi) + '</p>'
+    + '<p class="mt-auto pt-1 text-xs text-slate-500">oleh <strong>' + esc(it.Nama) + '</strong> · ' + esc(hariLaluPasar(it.Diperbarui)) + '</p>'
+    + kontakPasar(it)
+    + '<div class="flex gap-2"><button type="button" class="btn btn-ghost !min-h-[40px] flex-1" onclick="bukaDetailPasar(\'' + it.ID + '\')">Detail</button>'
+    + (AppState.token && isApproved() ? '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="bukaLaporPasar(\'' + it.ID + '\')" aria-label="Laporkan ' + esc(it.Judul) + '" title="Laporkan"><span class="material-symbols-outlined">flag</span></button>' : '')
+    + '</div></div></article>').join('') + '</div>';
+}
+function bukaDetailPasar(id) {
+  const it = AppState.pasar.items.find(x => x.ID === id); if (!it) return;
+  const foto = it.Foto.length ? '<div class="grid gap-2">' + it.Foto.map(u => '<img src="' + esc(u) + '" alt="' + esc(it.Judul) + '" loading="lazy" referrerpolicy="no-referrer" class="max-h-96 w-full rounded-xl object-cover">').join('') + '</div>' : fotoPasarHtml(it, 'h-40 rounded-xl');
+  openModal('<div class="p-5"><div class="mb-3 flex items-start justify-between gap-3"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="chip bg-primary-soft text-primary">' + esc(it.Jenis) + '</span>'
+    + (it.Status === 'Tersedia' ? '' : '<span class="chip bg-slate-200 text-slate-700">Tidak tersedia</span>') + '<span class="text-xs text-slate-500">' + esc(it.Kategori) + '</span></div>'
+    + '<h2 class="mt-1 text-lg font-bold">' + esc(it.Judul) + '</h2></div><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="closeModal()" aria-label="Tutup"><span class="material-symbols-outlined">close</span></button></div>'
+    + foto + '<p class="mt-3 text-xl font-extrabold text-primary">' + esc(hargaPasar(it.Harga)) + '</p>'
+    + '<p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(it.Deskripsi) + '</p>'
+    + '<p class="mt-3 text-xs text-slate-500">oleh <strong>' + esc(it.Nama) + '</strong> · ' + esc(hariLaluPasar(it.Diperbarui)) + '</p><div class="mt-4">' + kontakPasar(it) + '</div></div>');
+}
+function bukaLaporPasar(id) {
+  const it = AppState.pasar.items.find(x => x.ID === id); if (!it) return;
+  openModal('<form class="p-5" onsubmit="kirimLaporPasar(event,\'' + id + '\')"><h2 class="text-lg font-bold">Laporkan etalase</h2>'
+    + '<p class="mt-1 text-sm text-slate-600">“' + esc(it.Judul) + '”. Admin akan memeriksa laporan Anda. Etalase tidak langsung disembunyikan.</p>'
+    + '<label class="lbl mt-4" for="alasanLapor">Alasan laporan</label><textarea id="alasanLapor" class="inp" rows="3" minlength="5" maxlength="200" required data-autofocus placeholder="Contoh: barang terlarang / penipuan / konten tidak pantas."></textarea>'
+    + '<div class="mt-5 flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button><button type="submit" class="btn btn-danger">Kirim Laporan</button></div></form>');
+}
+async function kirimLaporPasar(ev, id) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]'); setBusy(btn, true, 'Mengirim…');
+  try { await call('api_laporEtalase', id, $('alasanLapor').value.trim()); closeModal(); toast('Laporan terkirim. Terima kasih.'); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+
+/* ---- Etalase Saya ---- */
+pages.pasarSaya = async () => {
+  if (!AppState.token || !isApproved()) return lockedHtml('Etalase hanya untuk anggota yang biodatanya sudah disetujui.');
+  AppState.pasarSaya = await call('api_pasarSaya');
+  return pasarSayaHtml();
+};
+function barisEtalaseHtml(it, ctx) {
+  const adm = ctx === 'admin';
+  return '<article class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center' + (it.Disembunyikan ? ' ring-2 ring-red-300' : '') + '">'
+    + '<div class="w-full shrink-0 overflow-hidden rounded-xl sm:w-24">' + fotoPasarHtml(it, 'h-20') + '</div>'
+    + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip bg-primary-soft text-primary">' + esc(it.Jenis) + '</span>'
+    + '<span class="chip ' + (it.Status === 'Tersedia' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700') + '">' + esc(it.Status) + '</span>'
+    + (it.Disembunyikan ? '<span class="chip bg-red-100 text-red-700">Disembunyikan admin</span>' : '')
+    + (adm && it.Laporan ? '<span class="chip bg-amber-100 text-amber-800">' + it.Laporan + ' laporan</span>' : '') + '</div>'
+    + '<h2 class="mt-1 truncate font-bold">' + esc(it.Judul) + '</h2>'
+    + '<p class="truncate text-sm text-slate-600">' + esc(hargaPasar(it.Harga)) + ' · ' + esc(it.Kategori) + (adm ? ' · penjual: ' + esc(it.NamaTampil) + ' (' + esc(it.PemilikNama) + ')' : '') + '</p>'
+    + '<p class="text-xs text-slate-500">' + esc(hariLaluPasar(it.Diperbarui)) + '</p></div>'
+    + '<div class="flex flex-wrap gap-1 sm:justify-end">'
+    + (adm ? '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="sembunyikanEtalase(\'' + it.ID + '\',' + (it.Disembunyikan ? 'false' : 'true') + ')" title="' + (it.Disembunyikan ? 'Tampilkan lagi' : 'Sembunyikan') + '"><span class="material-symbols-outlined">' + (it.Disembunyikan ? 'visibility' : 'visibility_off') + '</span></button>'
+      : '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahStatusEtalase(\'' + it.ID + '\',\'' + (it.Status === 'Tersedia' ? 'Tidak tersedia' : 'Tersedia') + '\')" title="Ubah status"><span class="material-symbols-outlined">' + (it.Status === 'Tersedia' ? 'toggle_on' : 'toggle_off') + '</span>' + (it.Status === 'Tersedia' ? 'Tersedia' : 'Habis') + '</button>')
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="bukaEditorEtalase(\'' + ctx + '\',\'' + it.ID + '\')" aria-label="Ubah ' + esc(it.Judul) + '"><span class="material-symbols-outlined">edit</span></button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusEtalase(\'' + ctx + '\',\'' + it.ID + '\')" aria-label="Hapus ' + esc(it.Judul) + '"><span class="material-symbols-outlined">delete</span></button></div></article>';
+}
+function pasarSayaHtml() {
+  const S = AppState.pasarSaya;
+  return '<div class="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h1 class="text-2xl font-extrabold text-primary-dark">Etalase Saya</h1>'
+    + '<p class="text-sm text-slate-500">' + S.items.length + ' dari ' + S.batas + ' etalase. Perubahan langsung tampil di Pasar.</p></div>'
+    + '<div class="flex gap-2"><button type="button" class="btn btn-ghost" onclick="navigateTo(\'pasar\')"><span class="material-symbols-outlined">storefront</span>Lihat Pasar</button>'
+    + '<button type="button" class="btn btn-primary" onclick="bukaEditorEtalase(\'saya\')"' + (S.items.length >= S.batas ? ' disabled' : '') + '><span class="material-symbols-outlined">add</span>Tambah Etalase</button></div></div>'
+    + (S.items.length ? '<div class="space-y-3">' + S.items.map(i => barisEtalaseHtml(i, 'saya')).join('') + '</div>'
+      : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">add_business</span><p class="mt-2">Belum ada etalase. Tekan Tambah Etalase untuk mulai berjualan.</p></div>');
+}
+async function segarkanEtalase(ctx) {
+  AppState.pasar = null;
+  if (ctx === 'admin') { AppState.pasarAdm = await call('api_pasarAdmin'); renderPasarAdmin(); }
+  else { AppState.pasarSaya = await call('api_pasarSaya'); $('app-container').innerHTML = pasarSayaHtml(); }
+}
+async function ubahStatusEtalase(id, status) {
+  try { await call('api_statusEtalase', id, status); toast('Status diperbarui.'); await segarkanEtalase('saya'); } catch (e) { fail(e); }
+}
+function konfirmasiHapusEtalase(ctx, id) {
+  openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-red-100 text-red-700"><span class="material-symbols-outlined">delete_forever</span></span>'
+    + '<div><h2 class="text-lg font-bold">Hapus etalase?</h2><p class="text-sm text-slate-600">Etalase dan fotonya akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.</p></div></div>'
+    + '<div class="mt-5 flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()" data-autofocus>Batal</button><button class="btn btn-danger" onclick="hapusEtalase(\'' + ctx + '\',\'' + id + '\')">Ya, hapus</button></div></div>');
+}
+async function hapusEtalase(ctx, id) {
+  try { await call('api_hapusEtalase', id); closeModal(); toast('Etalase dihapus.'); await segarkanEtalase(ctx); } catch (e) { closeModal(); fail(e); }
+}
+
+/* ---- Editor etalase (dipakai anggota dan admin) ---- */
+function bukaEditorEtalase(ctx, id) {
+  const src = ctx === 'admin' ? AppState.pasarAdm : AppState.pasarSaya;
+  const it = id ? src.items.find(x => x.ID === id) : null;
+  if (id && !it) return;
+  AppState.etCtx = ctx;
+  AppState.etFoto = { lama: it ? it.FotoIds.map((fid, i) => ({ id: fid, url: it.Foto[i] })) : [], baru: [] };
+  const opt = (list, v) => list.map(k => '<option value="' + esc(k) + '"' + (k === v ? ' selected' : '') + '>' + esc(k) + '</option>').join('');
+  const kat = src.kategori.slice(); if (it && kat.indexOf(it.Kategori) === -1) kat.push(it.Kategori);
+  const pemilik = ctx === 'admin' && !it
+    ? '<div class="sm:col-span-2"><label class="lbl" for="etPemilik">Atas nama anggota</label><select id="etPemilik" class="inp" required><option value="">Pilih anggota…</option>'
+      + src.anggota.map(a => '<option value="' + esc(a.Email) + '">' + esc(a.Nama) + ' (' + esc(a.Panggilan) + ')</option>').join('') + '</select>'
+      + '<p class="mt-1 text-xs text-slate-500">Etalase ini menjadi milik anggota tersebut, dihitung dalam batas ' + src.batas + ' etalasenya, dan bisa ia ubah atau hapus sendiri.</p></div>' : '';
+  openModal('<form class="p-5" onsubmit="simpanEtalase(event,\'' + (id || '') + '\')"><div class="mb-4 flex items-start justify-between gap-3"><h2 class="text-lg font-bold">' + (it ? 'Ubah Etalase' : 'Tambah Etalase') + '</h2>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="closeModal()" aria-label="Tutup"><span class="material-symbols-outlined">close</span></button></div>'
+    + '<div class="grid gap-3 sm:grid-cols-2">' + pemilik
+    + '<div><label class="lbl" for="etJenis">Jenis</label><select id="etJenis" class="inp">' + opt(['Produk', 'Jasa'], it ? it.Jenis : 'Produk') + '</select></div>'
+    + '<div><label class="lbl" for="etKat">Kategori</label><select id="etKat" class="inp">' + opt(kat, it ? it.Kategori : '') + '</select></div>'
+    + '<div class="sm:col-span-2"><label class="lbl" for="etJudul">Judul</label><input id="etJudul" class="inp" type="text" maxlength="100" required data-autofocus value="' + esc(it ? it.Judul : '') + '" placeholder="Contoh: Kue kering lebaran"></div>'
+    + '<div class="sm:col-span-2"><label class="lbl" for="etDesk">Deskripsi</label><textarea id="etDesk" class="inp" rows="4" maxlength="600" required placeholder="Jelaskan produk atau jasa Anda, ukuran, bahan, area layanan, cara pesan.">' + esc(it ? it.Deskripsi : '') + '</textarea></div>'
+    + '<div><label class="lbl" for="etHarga">Harga (opsional)</label><input id="etHarga" class="inp" type="text" maxlength="40" value="' + esc(it ? it.Harga : '') + '" placeholder="25000 atau Mulai dari 50000">'
+    + '<p class="mt-1 text-xs text-slate-500">Kosong = tampil “Hubungi penjual”.</p></div>'
+    + '<div><label class="lbl" for="etStatus">Status</label><select id="etStatus" class="inp">' + opt(['Tersedia', 'Tidak tersedia'], it ? it.Status : 'Tersedia') + '</select></div>'
+    + '<div><label class="lbl" for="etNama">Nama tampil</label><input id="etNama" class="inp" type="text" maxlength="40" value="' + esc(it ? it.NamaTampil : '') + '" placeholder="' + esc(ctx === 'admin' ? 'Kosong = nama panggilan pemilik' : 'Kosong = ' + src.namaBawaan) + '">'
+    + '<p class="mt-1 text-xs text-slate-500">Boleh nama toko atau nama buatan sendiri.</p></div>'
+    + '<div><label class="lbl" for="etWa">Nomor WhatsApp etalase (opsional)</label><input id="etWa" class="inp" type="tel" inputmode="tel" value="' + esc(it ? it.WaEtalase : '') + '" placeholder="081234567890">'
+    + '<p class="mt-1 text-xs text-slate-500">Bila diisi, tombol WhatsApp tampil untuk siapa saja tanpa login. Bila kosong, hanya anggota yang login yang dapat menghubungi lewat nomor biodata.</p></div>'
+    + '<div class="sm:col-span-2"><span class="lbl">Foto (opsional, maksimal 3)</span><div id="etFotoGrid" class="grid grid-cols-3 gap-2"></div>'
+    + '<input id="etFotoInp" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" onchange="pilihFotoEtalase(this)">'
+    + '<button type="button" id="etFotoTambah" class="btn btn-ghost mt-2" onclick="$(\'etFotoInp\').click()"><span class="material-symbols-outlined">add_photo_alternate</span>Tambah foto</button></div></div>'
+    + '<div class="mt-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-800"><strong>Perhatian:</strong> foto dan nomor WhatsApp etalase tampil untuk umum. Dilarang menjual barang atau jasa ilegal, penipuan, atau konten tidak pantas. Transaksi menjadi tanggung jawab penjual dan pembeli. Admin dapat menyembunyikan atau menghapus etalase yang melanggar.</div>'
+    + '<div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button><button type="submit" class="btn btn-primary">' + (it ? 'Simpan Perubahan' : 'Pasang Etalase') + '</button></div></form>');
+  gambarFotoEtalase();
+}
+function gambarFotoEtalase() {
+  const g = $('etFotoGrid'); if (!g) return;
+  const F = AppState.etFoto, tot = F.lama.length + F.baru.length;
+  const sel = (src, tipe, i) => '<div class="relative overflow-hidden rounded-xl bg-slate-100"><img src="' + esc(src) + '" alt="Foto ' + (i + 1) + '" referrerpolicy="no-referrer" class="h-24 w-full object-cover">'
+    + '<button type="button" class="absolute right-1 top-1 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-red-700 shadow-sm" onclick="buangFotoEtalase(\'' + tipe + '\',' + i + ')" aria-label="Hapus foto"><span class="material-symbols-outlined !text-base">close</span></button></div>';
+  g.innerHTML = F.lama.map((f, i) => sel(f.url, 'lama', i)).join('') + F.baru.map((d, i) => sel(d, 'baru', i)).join('');
+  const b = $('etFotoTambah'); if (b) b.style.display = tot >= 3 ? 'none' : '';
+}
+function buangFotoEtalase(tipe, i) { AppState.etFoto[tipe].splice(i, 1); gambarFotoEtalase(); }
+async function pilihFotoEtalase(inp) {
+  const f = inp.files[0]; inp.value = ''; if (!f) return;
+  const F = AppState.etFoto;
+  if (F.lama.length + F.baru.length >= 3) { toast('Foto maksimal 3.', 'error'); return; }
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type)) { toast('Gunakan foto JPG, PNG, atau WebP.', 'error'); return; }
+  if (f.size > 15 * 1024 * 1024) { toast('Ukuran foto maksimal 15 MB.', 'error'); return; }
+  try { F.baru.push(await compressImage(f, 960)); gambarFotoEtalase(); } catch (e) { toast(e.message, 'error'); }
+}
+async function simpanEtalase(ev, id) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]'), ctx = AppState.etCtx, F = AppState.etFoto;
+  const p = { id: id || '', jenis: $('etJenis').value, kategori: $('etKat').value, judul: $('etJudul').value.trim(), deskripsi: $('etDesk').value.trim(), harga: $('etHarga').value.trim(),
+    namaTampil: $('etNama').value.trim(), waEtalase: $('etWa').value.trim(), status: $('etStatus').value, fotoLama: F.lama.map(x => x.id), fotoBaru: F.baru };
+  if ($('etPemilik')) p.pemilik = $('etPemilik').value;
+  setBusy(btn, true, 'Menyimpan…');
+  try { await call('api_simpanEtalase', p); closeModal(); toast(id ? 'Etalase diperbarui.' : 'Etalase dipasang.'); await segarkanEtalase(ctx); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+
+/* ---- Tab Pasar di Panel Admin ---- */
+async function paintPasarAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  body.innerHTML = loadingHtml();
+  try {
+    if (!AppState.pasarAdm) AppState.pasarAdm = await call('api_pasarAdmin');
+    if (AppState.tab === 'Pasar') renderPasarAdmin();
+  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
+}
+function renderPasarAdmin() {
+  const body = $('adminBody'); if (!body || !AppState.pasarAdm) return;
+  const A = AppState.pasarAdm;
+  const lap = A.laporan.length ? A.laporan.map(l => '<article class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center"><div class="min-w-0 flex-1">'
+    + '<div class="flex flex-wrap items-center gap-2"><span class="chip bg-amber-100 text-amber-800">Laporan</span>' + (l.Disembunyikan ? '<span class="chip bg-red-100 text-red-700">Sudah disembunyikan</span>' : '')
+    + '<span class="text-xs text-slate-500">' + esc(tgl(l.Dibuat)) + ' · dari ' + esc(l.Pelapor) + '</span></div>'
+    + '<h3 class="mt-1 font-bold">' + esc(l.Judul) + ' <span class="font-normal text-slate-500">· ' + esc(l.Penjual) + '</span></h3>'
+    + '<p class="text-sm text-slate-700">' + esc(l.Alasan) + '</p></div>'
+    + '<div class="flex flex-wrap gap-1"><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="sembunyikanEtalase(\'' + l.EtalaseID + '\',true)"><span class="material-symbols-outlined">visibility_off</span>Sembunyikan</button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusEtalase(\'admin\',\'' + l.EtalaseID + '\')"><span class="material-symbols-outlined">delete</span>Hapus</button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="abaikanLaporan(\'' + l.ID + '\')"><span class="material-symbols-outlined">done</span>Abaikan</button></div></article>').join('')
+    : '<div class="card p-6 text-center text-sm text-slate-500">Tidak ada laporan yang menunggu.</div>';
+  body.innerHTML = '<h2 class="mb-2 font-bold">Laporan (' + A.laporan.length + ')</h2><div class="mb-6 space-y-3">' + lap + '</div>'
+    + '<div class="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 class="font-bold">Semua etalase (' + A.items.length + ')</h2>'
+    + '<button type="button" class="btn btn-primary" onclick="bukaEditorEtalase(\'admin\')"><span class="material-symbols-outlined">add_business</span>Tambah untuk anggota</button></div>'
+    + (A.items.length ? '<div class="mb-6 space-y-3">' + A.items.map(i => barisEtalaseHtml(i, 'admin')).join('') + '</div>' : '<div class="card mb-6 p-6 text-center text-sm text-slate-500">Belum ada etalase.</div>')
+    + '<form class="card grid gap-3 p-5" onsubmit="simpanKategoriPasar(event)"><h2 class="font-bold">Daftar kategori</h2>'
+    + '<label class="lbl" for="katPasar">Satu kategori per baris (2 sampai 30 kategori)</label><textarea id="katPasar" class="inp" rows="8">' + esc(A.kategori.join('\n')) + '</textarea>'
+    + '<p class="text-xs text-slate-500">Etalase yang sudah memakai kategori lama tetap tampil. Kategori baru muncul di pilihan form dan filter.</p>'
+    + '<div><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">save</span>Simpan Kategori</button></div></form>';
+}
+async function sembunyikanEtalase(id, sembunyi) {
+  try { AppState.pasarAdm = await call('api_sembunyikanEtalase', id, !!sembunyi); AppState.pasar = null; toast(sembunyi ? 'Etalase disembunyikan.' : 'Etalase ditampilkan lagi.'); renderPasarAdmin(); } catch (e) { fail(e); }
+}
+async function abaikanLaporan(id) {
+  try { AppState.pasarAdm = await call('api_abaikanLaporan', id); toast('Laporan diabaikan.'); renderPasarAdmin(); } catch (e) { fail(e); }
+}
+async function simpanKategoriPasar(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]'); setBusy(btn, true, 'Menyimpan…');
+  try { AppState.pasarAdm = await call('api_simpanKategori', $('katPasar').value.split('\n')); AppState.pasar = null; toast('Kategori disimpan.'); renderPasarAdmin(); }
+  catch (e) { setBusy(btn, false); fail(e); }
+}
+
 /* ---- Panel admin ---- */
 pages.admin = async () => {
   if (!AppState.isAdmin) return lockedHtml('Halaman ini khusus admin.');
@@ -1569,14 +1823,14 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'];
-  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
+  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Pasar', 'Profil', 'Jadwal', 'Notifikasi'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Pasar: 'Pasar', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Pasar', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
@@ -1584,6 +1838,7 @@ function setTab(t) { AppState.tab = t; AppState.q = ''; $('app-container').inner
 function paintAdmin() {
   if (AppState.tab === 'Pengumuman') { paintPengumumanAdmin(); return; }
   if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
+  if (AppState.tab === 'Pasar') { paintPasarAdmin(); return; }
   if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
   if (AppState.tab === 'Jadwal') { paintJadwalAdmin(); return; }
   if (AppState.tab === 'Notifikasi') { paintNotifAdmin(); return; }
@@ -1651,7 +1906,7 @@ async function resetPin(id, btn) {
   setBusy(btn, true, 'Memproses…');
   try {
     const h = await call('api_resetPin', id);
-    const pesan = 'Halo ' + h.nama + ', PIN sementara Anda di ' + (AppState.stats.title || 'Biodata Kelas 84A MM') + ' adalah ' + h.pin
+    const pesan = 'Halo ' + h.nama + ', PIN sementara Anda di ' + (AppState.stats.title || 'Portal Kelas 84A MM') + ' adalah ' + h.pin
       + '. Silakan masuk dengan email ' + h.email + ' lalu segera ganti PIN lewat tombol PIN di pojok kanan atas.';
     openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-emerald-100 text-emerald-700"><span class="material-symbols-outlined">key</span></span>'
       + '<div><h2 class="text-lg font-bold">PIN sementara siap</h2><p class="text-sm text-slate-600">Untuk ' + esc(h.nama) + '. PIN ini hanya tampil sekarang, catat atau kirim sebelum menutup.</p></div></div>'
