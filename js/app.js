@@ -1271,7 +1271,7 @@ function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal:
 /* ---- Pengumuman kelas: kartu di Beranda (anggota) dan tab di Panel Admin ---- */
 function pengumumanHtml(list) {
   if (!list || (!list.length && !AppState.isAdmin)) return ''; // anggota tidak perlu melihat bagian kosong
-  const kartu = list.map(p => '<article class="card p-4' + (p.Penting ? ' bg-red-50/60 ring-2 ring-red-300' : '') + '">'
+  const kartu = list.map(p => '<article tabindex="0" class="card pg-kartu p-4' + (p.Penting ? ' pg-penting bg-red-50/60' : '') + '">'
     + '<div class="flex flex-wrap items-center gap-2">'
     + (p.Penting ? '<span class="chip bg-red-100 text-red-700"><span class="material-symbols-outlined !text-sm">priority_high</span>Penting</span>' : '')
     + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Berakhir ? ' · sampai ' + esc(tglSingkat(p.Berakhir)) : '') + '</span></div>'
