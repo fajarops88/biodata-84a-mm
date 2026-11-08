@@ -399,8 +399,38 @@ function strukturHtml(p) {
 }
 
 /* ---- Agenda (dipakai di Beranda publik dan di tab Jadwal Kuliah milik admin) ---- */
+const menitJam = h => { const m = /^(\d{1,2}):(\d{2})/.exec(h || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const sekarangWita = () => {
+  const n = new Date();
+  return { ymd: ymdWita(n), menit: menitJam(n.toLocaleTimeString('en-GB', { timeZone: WITA, hour: '2-digit', minute: '2-digit', hour12: false })) };
+};
+/** Menit selesai sebuah item hari ini: jam selesai; ujian tanpa jam selesai = mulai + 2 jam (maks 23.59). */
+function menitAkhirItem(it) {
+  const a = menitJam(it.jamSelesai); if (a !== null) return a;
+  const m = menitJam(it.jamMulai); return m === null ? null : Math.min(m + 120, 1439);
+}
+/** 'berlangsung' | 'selesai' | 'akan' | '' menurut jam WITA di perangkat. Batal/pindah tidak pernah menyala. */
+function statusWaktu(it) {
+  if (!it || it.status === 'batal' || it.status === 'pindah') return '';
+  const k = sekarangWita();
+  if (it.tanggal < k.ymd) return 'selesai';
+  if (it.tanggal > k.ymd) return '';
+  if (it.ujian && it.totalHari > 1) return 'berlangsung';
+  const mu = menitJam(it.jamMulai), ak = menitAkhirItem(it);
+  if (mu === null || ak === null) return 'akan';
+  return k.menit < mu ? 'akan' : k.menit < ak ? 'berlangsung' : 'selesai';
+}
+function teksSisa(menit) {
+  const j = Math.floor(menit / 60), m = menit % 60;
+  return (j ? j + ' jam ' : '') + (m || !j ? m + ' menit' : '').trim();
+}
+function sisaItem(it) {
+  const ak = menitAkhirItem(it), k = sekarangWita();
+  return ak === null ? '' : 'selesai ' + teksSisa(Math.max(1, ak - k.menit)) + ' lagi';
+}
+function sigAgenda(d) { return d ? d.items.map(statusWaktu).join('|') + '@' + sekarangWita().ymd : ''; }
 function agendaItemHtml(it, admin, hariIni) {
-  const jam = esc(it.jamMulai) + (it.jamSelesai ? '<span class="block text-xs font-medium text-slate-500">s.d. ' + esc(it.jamSelesai) + '</span>' : '');
+  const jam = it.jamMulai ? esc(it.jamMulai) + (it.jamSelesai ? '<span class="block text-xs font-medium text-slate-500">s.d. ' + esc(it.jamSelesai) + '</span>' : '') : 'Seharian';
   let chips = '', judul = '', info = '', redup = '';
   if (it.ujian) {
     chips = '<span class="chip bg-red-600 text-white">' + esc(it.jenis) + '</span>';
@@ -425,8 +455,18 @@ function agendaItemHtml(it, admin, hariIni) {
         : '<button type="button" class="btn btn-ghost !min-h-[36px] !px-3" onclick="pulihPertemuan(' + a + ')"><span class="material-symbols-outlined">undo</span>Pulihkan</button>')
       + '</div>';
   }
-  const hariIniItem = hariIni && it.tanggal === hariIni && !it.ujian && it.status !== 'batal' && it.status !== 'pindah' ? ' agenda-sekarang' : '';
-  return '<article class="flex flex-wrap items-start gap-3 rounded-xl border border-slate-100 p-3' + redup + hariIniItem + '">'
+  const sw = statusWaktu(it); let kelas = '';
+  if (sw === 'berlangsung') {
+    kelas = ' agenda-berlangsung';
+    chips += '<span class="chip bg-primary text-white">Sedang berlangsung</span>';
+    if (it.totalHari > 1) chips += '<span class="chip bg-primary-soft text-primary">Hari ke-' + it.hariKe + ' dari ' + it.totalHari + '</span>';
+    else info += (info ? ' · ' : '') + '<span class="agenda-sisa font-semibold text-primary" data-id="' + esc(it.tanggal + '|' + it.jamMulai + '|' + it.jamSelesai + '|' + (it.mataKuliah || '')) + '">' + esc(sisaItem(it)) + '</span>';
+    if (it.totalHari > 1) info += (info ? ' · ' : '') + 'berakhir ' + esc(tglPendek(it.berakhir));
+  } else if (sw === 'selesai') {
+    kelas = ' agenda-selesai';
+    chips += '<span class="chip bg-slate-100 text-slate-600">Selesai</span>';
+  }
+  return '<article class="flex flex-wrap items-start gap-3 rounded-xl border border-slate-100 p-3' + redup + kelas + '" data-tgl="' + esc(it.tanggal) + '" data-jm="' + esc(it.jamMulai) + '" data-js="' + esc(it.jamSelesai || '') + '" data-uj="' + (it.ujian ? 1 : 0) + '">'
     + '<div class="w-20 shrink-0 text-sm font-bold text-primary">' + jam + '</div>'
     + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">' + chips + '</div>'
     + '<h4 class="font-bold' + garis + '">' + judul + '</h4>'
@@ -440,7 +480,7 @@ function agendaBodyHtml(d, admin) {
   }
   const per = {};
   d.items.forEach(it => { (per[it.tanggal] = per[it.tanggal] || []).push(it); });
-  return Object.keys(per).sort().map(tgl => '<div class="card p-4' + (tgl === d.hariIni ? ' agenda-hari' : '') + '"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
+  return Object.keys(per).sort().map(tgl => '<div class="card p-4"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
     + (tgl === d.hariIni ? '<span class="chip bg-primary text-white">Hari ini</span>' : '') + '</h3>'
     + '<div class="space-y-2">' + per[tgl].map(it => agendaItemHtml(it, admin, d.hariIni)).join('') + '</div></div>').join('');
 }
@@ -457,12 +497,25 @@ function agendaBoxHtml(mode, d) {
 }
 function agendaSectionHtml(d) {
   return '<section class="mt-6" aria-labelledby="hAgenda"><h2 id="hAgenda" class="mb-3 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">calendar_month</span>Agenda</h2>'
-    + '<div id="agenda_pub">' + agendaBoxHtml('pub', d) + '</div></section>';
+    + '<div id="agenda_pub" data-sig="' + esc(sigAgenda(d)) + '">' + agendaBoxHtml('pub', d) + '</div></section>';
 }
 function paintAgenda(mode) {
   const box = $('agenda_' + mode); if (!box) return;
   box.innerHTML = agendaBoxHtml(mode, AppState.agenda[mode]); box.style.opacity = '';
+  box.dataset.sig = sigAgenda(AppState.agenda[mode]);
 }
+/** Tiap 30 detik: gambar ulang agenda hanya bila status berubah (mulai/selesai), kalau tidak cukup segarkan teks sisa waktu. */
+function tickAgenda() {
+  ['pub', 'adm'].forEach(mode => {
+    const box = $('agenda_' + mode); if (!box || !AppState.agenda[mode]) return;
+    if (box.dataset.sig !== sigAgenda(AppState.agenda[mode])) { paintAgenda(mode); return; }
+    box.querySelectorAll('.agenda-berlangsung').forEach(el => {
+      const sisa = el.querySelector('.agenda-sisa'); if (!sisa) return;
+      sisa.textContent = sisaItem({ jamMulai: el.dataset.jm, jamSelesai: el.dataset.js, ujian: el.dataset.uj === '1' });
+    });
+  });
+}
+setInterval(tickAgenda, 30000);
 let _seqAgenda = 0;
 async function gantiPekan(mode, arah) {
   const d = AppState.agenda[mode]; if (!d) return;
@@ -1080,15 +1133,25 @@ function hitungMundur(iso) {
   return { teks: teks, urgent: selisih < 3 * 86400000, jam24: selisih < 86400000 };
 }
 /* Tugas ber-tanggal-berakhir: hitung mundur ke akhir hari berakhir (23.59 WITA), bukan ke waktu mulai. */
-const targetPeng = p => (p.Jenis === 'Tugas' && p.Berakhir) ? p.Berakhir + 'T23:59:00+08:00' : p.Waktu;
+const jenisUjian = j => j === 'UTS' || j === 'UAS';
+function targetPeng(p) {
+  if (p.Jenis === 'Tugas' && p.Berakhir) return p.Berakhir + 'T23:59:00+08:00';
+  if (jenisUjian(p.Jenis)) {
+    const akhir = p.Berakhir ? p.Berakhir + 'T23:59:00+08:00' : (p.JamSelesai ? String(p.Waktu).slice(0, 10) + 'T' + p.JamSelesai + ':00+08:00' : '');
+    if (akhir && Date.now() >= Date.parse(p.Waktu)) return akhir;
+  }
+  return p.Waktu;
+}
 const tglBerakhir = ymd => new Date(ymd + 'T12:00:00+08:00').toLocaleDateString('id-ID', { timeZone: WITA, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 function waktuPengText(p) {
-  return (p.Jenis === 'Tugas' && p.Berakhir) ? 'Mulai ' + fmtWaktu(p.Waktu) + ' · berakhir ' + tglBerakhir(p.Berakhir) : fmtWaktu(p.Waktu);
+  if ((p.Jenis === 'Tugas' || jenisUjian(p.Jenis)) && p.Berakhir) return 'Mulai ' + fmtWaktu(p.Waktu) + ' · berakhir ' + tglBerakhir(p.Berakhir);
+  if (jenisUjian(p.Jenis) && p.JamSelesai) return fmtWaktu(p.Waktu) + ' – ' + p.JamSelesai;
+  return fmtWaktu(p.Waktu);
 }
 function pengingatDashboardHtml(list) {
   const kartu = list.map(p => {
     const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, m = hitungMundur(targetPeng(p));
-    const ujian = (p.Jenis === 'UTS' || p.Jenis === 'UAS') && m.teks !== 'Sudah lewat';
+    const ujian = jenisUjian(p.Jenis) && m.teks !== 'Sudah lewat';
     return '<article class="card flex items-start gap-3 p-4' + (m.urgent ? ' ring-2 ring-red-300' : '') + (ujian ? ' peng-ujian' : m.jam24 ? ' peng-24' : '') + '">'
       + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
       + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
@@ -1127,7 +1190,9 @@ function renderPengingatAdmin() {
     + '<div class="md:col-span-2"><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="150" required placeholder="Contoh: UTS Manajemen Keuangan"></div>'
     + '<div><label class="lbl" for="pgWaktu" id="pgWaktuLbl">Tanggal dan jam (WITA)</label><input id="pgWaktu" class="inp" type="datetime-local" required></div>'
     + '<div id="pgBerakhirBox" class="hidden"><label class="lbl" for="pgBerakhir">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
-    + '<p class="mt-1 text-xs text-slate-500">Tugas tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.</p></div>'
+    + '<p class="mt-1 text-xs text-slate-500" id="pgBerakhirInfo">Tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.</p></div>'
+    + '<div id="pgJamSelesaiBox" class="hidden"><label class="lbl" for="pgJamSelesai">Jam selesai (opsional)</label><input id="pgJamSelesai" class="inp" type="time">'
+    + '<p class="mt-1 text-xs text-slate-500">Untuk ujian satu hari. Kosong = 2 jam dari jam mulai. Ujian berperiode (ada tanggal berakhir) menyala seharian.</p></div>'
     + '<div><label class="lbl" for="pgCatatan">Catatan (opsional)</label><input id="pgCatatan" class="inp" type="text" maxlength="300" placeholder="Contoh: Ruang 3.2, bawa kalkulator"></div>'
     + '<div class="md:col-span-2"><button type="submit" class="btn btn-primary w-full sm:w-auto"><span class="material-symbols-outlined">add_alert</span>Simpan Pengingat</button></div></form>';
   const daftar = d.rows.length ? d.rows.map(p => {
@@ -1145,11 +1210,14 @@ function renderPengingatAdmin() {
 }
 /** Isian tanggal berakhir hanya muncul untuk jenis Tugas; label waktu menjadi "mulai tampil". */
 function aturFormPengingat() {
-  const tugas = $('pgJenis') && $('pgJenis').value === 'Tugas';
+  const jenis = $('pgJenis') && $('pgJenis').value, tugas = jenis === 'Tugas', ujian = jenisUjian(jenis);
   const box = $('pgBerakhirBox'); if (!box) return;
-  box.classList.toggle('hidden', !tugas);
-  if (!tugas && $('pgBerakhir')) $('pgBerakhir').value = '';
-  $('pgWaktuLbl').textContent = tugas ? 'Tanggal dan jam mulai (WITA)' : 'Tanggal dan jam (WITA)';
+  box.classList.toggle('hidden', !(tugas || ujian));
+  $('pgJamSelesaiBox').classList.toggle('hidden', !ujian);
+  if (!(tugas || ujian) && $('pgBerakhir')) $('pgBerakhir').value = '';
+  if (!ujian && $('pgJamSelesai')) $('pgJamSelesai').value = '';
+  $('pgBerakhirInfo').textContent = ujian ? 'Isi bila ujian berlangsung beberapa hari (misal 9–13 November). Kosongkan untuk ujian satu hari.' : 'Tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.';
+  $('pgWaktuLbl').textContent = (tugas || ujian) ? 'Tanggal dan jam mulai (WITA)' : 'Tanggal dan jam (WITA)';
 }
 async function kirimPengingat(ev) {
   ev.preventDefault();
@@ -1157,7 +1225,8 @@ async function kirimPengingat(ev) {
   const w = $('pgWaktu').value;
   if (!w) return toast('Tanggal dan jam wajib diisi.', 'error');
   const p = { jenis: $('pgJenis').value, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), waktu: w + ':00+08:00', catatan: $('pgCatatan').value.trim(),
-    berakhir: $('pgJenis').value === 'Tugas' ? $('pgBerakhir').value : '' };
+    berakhir: ($('pgJenis').value === 'Tugas' || jenisUjian($('pgJenis').value)) ? $('pgBerakhir').value : '',
+    jamSelesai: jenisUjian($('pgJenis').value) ? $('pgJamSelesai').value : '' };
   setBusy(btn, true, 'Menyimpan…');
   try { AppState.pengAdmin = await call('api_tambahPengingat', p); toast('Pengingat ditambahkan.'); renderPengingatAdmin(); }
   catch (e) { setBusy(btn, false); fail(e); }
@@ -1248,7 +1317,7 @@ function renderJadwalAdmin() {
   body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>'
     + '<h2 class="mb-1 mt-8 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">calendar_month</span>Atur Pertemuan per Pekan</h2>'
     + '<p class="mb-3 text-xs text-slate-500">Batalkan atau geser satu pertemuan tanpa mengubah jadwal tetapnya. UTS dan UAS diisi lewat tab Pengingat dan otomatis tampil di Agenda.</p>'
-    + '<div id="agenda_adm">' + agendaBoxHtml('adm', AppState.agenda.adm) + '</div>';
+    + '<div id="agenda_adm" data-sig="' + esc(sigAgenda(AppState.agenda.adm)) + '">' + agendaBoxHtml('adm', AppState.agenda.adm) + '</div>';
 }
 async function kirimJadwal(ev) {
   ev.preventDefault();

@@ -115,8 +115,9 @@
 .anim-kedip { animation: pgKedip 1.2s ease-in-out infinite; }
 
 /* Agenda: kuliah hari ini menyala hijau, pertemuan batal berdenyut merah */
-.agenda-hari { animation: pgGlow 2.8s ease-in-out infinite; border-color: #86c9a5; }
-.agenda-sekarang { background: #f3faf6; border-color: #86c9a5 !important; animation: agendaSekarang 2s ease-in-out infinite; }
+.agenda-berlangsung { position: relative; z-index: 1; transform: scale(1.03); background: #f3faf6; border-color: #86c9a5 !important; animation: agendaBerlangsung 2s ease-in-out infinite; }
+.agenda-selesai { opacity: .55; }
+@keyframes agendaBerlangsung { 0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,.45); } 50% { box-shadow: 0 0 0 8px rgba(22,163,74,0), 0 0 18px 2px rgba(22,163,74,.35); } }
 .agenda-batal { border-color: #fca5a5 !important; animation: agendaBatal 2s ease-in-out infinite; }
 @keyframes agendaSekarang { 0%, 100% { box-shadow: 0 0 0 0 rgba(13, 92, 58, 0); } 50% { box-shadow: 0 0 14px 1px rgba(13, 92, 58, .35); } }
 @keyframes agendaBatal { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } 50% { box-shadow: 0 0 12px 1px rgba(220, 38, 38, .35); } }
