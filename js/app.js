@@ -368,15 +368,15 @@ function visiMisiHtml(p) {
 function strukturHtml(p) {
   return '<section class="mt-6" aria-labelledby="hStruktur"><h2 id="hStruktur" class="mb-3 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">account_tree</span>Struktur Organisasi</h2>'
     + '<div class="grid gap-3 sm:grid-cols-3">'
-    + p.pengurus.map(k => '<div class="card flex flex-col items-center p-5 text-center">'
-      + avatar({ NamaLengkap: k.nama || k.peran, NamaPanggilan: k.nama || k.peran, FotoUrl: k.fotoUrl }, 'h-24 w-24 rounded-2xl text-xl ring-4 ring-gold-soft')
+    + p.pengurus.map(k => '<div class="card pengurus-kartu flex flex-col items-center p-5 text-center">'
+      + '<div class="cincin">' + avatar({ NamaLengkap: k.nama || k.peran, NamaPanggilan: k.nama || k.peran, FotoUrl: k.fotoUrl }, 'h-24 w-24 rounded-2xl text-xl') + '</div>'
       + '<div class="mt-3 text-xs font-semibold uppercase text-gold">' + esc(k.peran) + '</div>'
       + '<div class="mt-1 font-bold ' + (k.nama ? '' : 'text-slate-400') + '">' + esc(k.nama || 'Belum ditetapkan') + '</div></div>').join('')
     + '</div></section>';
 }
 
 /* ---- Agenda (dipakai di Beranda publik dan di tab Jadwal Kuliah milik admin) ---- */
-function agendaItemHtml(it, admin) {
+function agendaItemHtml(it, admin, hariIni) {
   const jam = esc(it.jamMulai) + (it.jamSelesai ? '<span class="block text-xs font-medium text-slate-500">s.d. ' + esc(it.jamSelesai) + '</span>' : '');
   let chips = '', judul = '', info = '', redup = '';
   if (it.ujian) {
@@ -386,7 +386,7 @@ function agendaItemHtml(it, admin) {
   } else {
     judul = esc(it.mataKuliah);
     info = [it.ruang, it.dosen].filter(Boolean).map(esc).join(' · ');
-    if (it.status === 'batal') { chips = '<span class="chip bg-red-100 text-red-700">Dibatalkan</span>'; redup = ' opacity-70'; }
+    if (it.status === 'batal') { chips = '<span class="chip anim-kedip bg-red-100 text-red-700">Dibatalkan</span>'; redup = ' opacity-70 agenda-batal'; }
     else if (it.status === 'pindah') { chips = '<span class="chip bg-amber-100 text-amber-800">Dipindah ke ' + esc(tglPendek(it.ke)) + '</span>'; redup = ' opacity-70'; }
     else if (it.status === 'pengganti') chips = '<span class="chip bg-sky-100 text-sky-700">Jadwal pengganti (semula ' + esc(tglPendek(it.dari)) + ')</span>';
     if (it.catatan) info += (info ? ' · ' : '') + esc(it.catatan);
@@ -402,7 +402,8 @@ function agendaItemHtml(it, admin) {
         : '<button type="button" class="btn btn-ghost !min-h-[36px] !px-3" onclick="pulihPertemuan(' + a + ')"><span class="material-symbols-outlined">undo</span>Pulihkan</button>')
       + '</div>';
   }
-  return '<article class="flex flex-wrap items-start gap-3 rounded-xl border border-slate-100 p-3' + redup + '">'
+  const hariIniItem = hariIni && it.tanggal === hariIni && !it.ujian && it.status !== 'batal' && it.status !== 'pindah' ? ' agenda-sekarang' : '';
+  return '<article class="flex flex-wrap items-start gap-3 rounded-xl border border-slate-100 p-3' + redup + hariIniItem + '">'
     + '<div class="w-20 shrink-0 text-sm font-bold text-primary">' + jam + '</div>'
     + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">' + chips + '</div>'
     + '<h4 class="font-bold' + garis + '">' + judul + '</h4>'
@@ -416,9 +417,9 @@ function agendaBodyHtml(d, admin) {
   }
   const per = {};
   d.items.forEach(it => { (per[it.tanggal] = per[it.tanggal] || []).push(it); });
-  return Object.keys(per).sort().map(tgl => '<div class="card p-4"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
+  return Object.keys(per).sort().map(tgl => '<div class="card p-4' + (tgl === d.hariIni ? ' agenda-hari' : '') + '"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
     + (tgl === d.hariIni ? '<span class="chip bg-primary text-white">Hari ini</span>' : '') + '</h3>'
-    + '<div class="space-y-2">' + per[tgl].map(it => agendaItemHtml(it, admin)).join('') + '</div></div>').join('');
+    + '<div class="space-y-2">' + per[tgl].map(it => agendaItemHtml(it, admin, d.hariIni)).join('') + '</div></div>').join('');
 }
 
 function agendaBoxHtml(mode, d) {
@@ -485,7 +486,7 @@ pages.beranda = async () => {
     + '<h1 class="mt-4 text-3xl font-extrabold tracking-tight text-primary-dark md:text-4xl">Portal Kelas 84A MM</h1>'
     + '<p class="mt-1 font-semibold text-amber-800">Biodata · Agenda · Kuliah · Pasar</p>'
     + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
-    + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
+    + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary" data-hitung="' + (AppState.stats.approved || 0) + '">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
     + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
     + pengumumanHtml(AppState.pengumuman)
     + pengHtml
@@ -494,6 +495,24 @@ pages.beranda = async () => {
     + (AppState.token ? '' : '<section class="mt-6 grid gap-4 md:grid-cols-3">' + langkah.map(l => '<div class="card p-5"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-primary"><span class="material-symbols-outlined">' + l[0] + '</span></span>'
       + '<h3 class="mt-3 font-bold">' + l[1] + '</h3><p class="mt-1 text-sm text-slate-600">' + l[2] + '</p></div>').join('') + '</section>');
 };
+
+/** Angka naik dari nol saat halaman pertama tampil (tanpa animasi bila pengguna mematikan gerak). */
+function animasiAngka(root) {
+  if (!root) return;
+  const kurang = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  root.querySelectorAll('[data-hitung]').forEach(el => {
+    const n = Number(el.getAttribute('data-hitung'));
+    if (!isFinite(n) || n <= 0 || kurang) return;
+    const t0 = performance.now(), dur = 700;
+    const langkah = t => {
+      const f = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - f, 3);
+      el.textContent = String(Math.round(n * e));
+      if (f < 1) requestAnimationFrame(langkah); else el.textContent = String(n);
+    };
+    el.textContent = '0'; requestAnimationFrame(langkah);
+  });
+}
+after.beranda = () => animasiAngka($('app-container'));
 
 /* ---- Jendela Masuk (tombol di pojok kanan atas header) ---- */
 function bukaLogin() {
@@ -628,7 +647,7 @@ pages.teman = async () => {
     + '<button class="btn btn-ghost" onclick="reloadMembers()" aria-label="Muat ulang daftar"><span class="material-symbols-outlined">refresh</span></button></div></div>'
     + '<div id="grid" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"></div>';
 };
-after.teman = () => { if ($('grid')) paintGrid(); };
+after.teman = () => { const g = $('grid'); if (g) { g.classList.add('stagger'); paintGrid(); setTimeout(() => g.classList.remove('stagger'), 1400); } };
 function filterMembers(q) { AppState.q = q; paintGrid(); }
 async function reloadMembers() { AppState.members = null; navigateTo('teman'); }
 function paintGrid() {
@@ -1031,7 +1050,7 @@ function hitungMundur(iso) {
   const hari = Math.round((Date.parse(ymdWita(t) + 'T00:00:00Z') - Date.parse(ymdWita(kini) + 'T00:00:00Z')) / 86400000);
   const jam = Math.floor(selisih / 3600000), menit = Math.max(1, Math.floor(selisih / 60000));
   const teks = hari <= 0 ? 'Hari ini, ' + (jam >= 1 ? jam + ' jam lagi' : menit + ' menit lagi') : hari === 1 ? 'Besok' : hari + ' hari lagi';
-  return { teks: teks, urgent: selisih < 3 * 86400000 };
+  return { teks: teks, urgent: selisih < 3 * 86400000, jam24: selisih < 86400000 };
 }
 /* Tugas ber-tanggal-berakhir: hitung mundur ke akhir hari berakhir (23.59 WITA), bukan ke waktu mulai. */
 const targetPeng = p => (p.Jenis === 'Tugas' && p.Berakhir) ? p.Berakhir + 'T23:59:00+08:00' : p.Waktu;
@@ -1042,7 +1061,8 @@ function waktuPengText(p) {
 function pengingatDashboardHtml(list) {
   const kartu = list.map(p => {
     const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, m = hitungMundur(targetPeng(p));
-    return '<article class="card flex items-start gap-3 p-4' + (m.urgent ? ' ring-2 ring-red-300' : '') + '">'
+    const ujian = (p.Jenis === 'UTS' || p.Jenis === 'UAS') && m.teks !== 'Sudah lewat';
+    return '<article class="card flex items-start gap-3 p-4' + (m.urgent ? ' ring-2 ring-red-300' : '') + (ujian ? ' peng-ujian' : m.jam24 ? ' peng-24' : '') + '">'
       + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
       + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
       + (m.urgent ? '<span class="chip bg-red-100 text-red-700">Segera</span>' : '') + '</div>'
@@ -1050,7 +1070,7 @@ function pengingatDashboardHtml(list) {
       + (p.MataKuliah ? '<p class="text-sm text-slate-600">' + esc(p.MataKuliah) + '</p>' : '')
       + '<p class="text-xs text-slate-500">' + esc(waktuPengText(p)) + '</p>'
       + (p.Catatan ? '<p class="mt-1 text-sm text-slate-600">' + esc(p.Catatan) + '</p>' : '') + '</div>'
-      + '<div class="shrink-0 text-right text-sm font-bold ' + (m.urgent ? 'text-red-700' : 'text-primary') + '">' + esc(m.teks) + '</div></article>';
+      + '<div class="shrink-0 text-right text-sm font-bold ' + (m.jam24 ? 'anim-kedip ' : '') + (m.urgent ? 'text-red-700' : 'text-primary') + '">' + esc(m.teks) + '</div></article>';
   }).join('');
   return '<section class="mt-6" aria-label="Pengingat"><div class="mb-3 flex items-center justify-between gap-3">'
     + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">notifications_active</span>Pengingat</h2>'
@@ -1604,7 +1624,7 @@ function pasarHtml() {
     + '<div id="pasarBody"></div>'
     + '<p class="mt-6 text-xs text-slate-500">Transaksi menjadi tanggung jawab penjual dan pembeli. Tidak ada pembayaran lewat aplikasi ini. Lihat sesuatu yang tidak pantas? Tekan Laporkan (khusus anggota yang sudah masuk).</p>';
 }
-after.pasar = () => paintPasar();
+after.pasar = () => { const g = $('pasarBody'); if (g) { g.classList.add('stagger'); paintPasar(); setTimeout(() => g.classList.remove('stagger'), 1400); } };
 function setFilterPasar(v) { AppState.pasarF.jenis = v; $('app-container').innerHTML = pasarHtml(); paintPasar(); }
 function kontakPasar(it) {
   const nomor = it.Wa || (AppState.pasarKontak && AppState.pasarKontak[it.ID]) || '';
@@ -1818,7 +1838,7 @@ pages.admin = async () => {
   AppState.adminData = await call('api_admin');
   return adminHtml();
 };
-after.admin = () => paintAdmin();
+after.admin = () => { paintAdmin(); animasiAngka($('app-container')); };
 function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
@@ -1827,7 +1847,7 @@ function adminHtml() {
   const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Pasar: 'Pasar', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
-      + '<div><div class="text-2xl font-extrabold leading-none">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
+      + '<div><div class="text-2xl font-extrabold leading-none" data-hitung="' + k[1] + '">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
     + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Pasar', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'

@@ -97,6 +97,49 @@
 }
 @keyframes pgKedip { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 
+/* ---- Animasi tambahan ---- */
+@keyframes munculNaik { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+#app-container > * { animation: munculNaik .5s ease backwards; }
+#app-container > *:nth-child(2) { animation-delay: .06s; }
+#app-container > *:nth-child(3) { animation-delay: .12s; }
+#app-container > *:nth-child(4) { animation-delay: .18s; }
+#app-container > *:nth-child(5) { animation-delay: .24s; }
+#app-container > *:nth-child(n+6) { animation-delay: .3s; }
+.stagger article { animation: munculNaik .45s ease backwards; }
+.stagger article:nth-child(1) { animation-delay: .02s; } .stagger article:nth-child(2) { animation-delay: .07s; }
+.stagger article:nth-child(3) { animation-delay: .12s; } .stagger article:nth-child(4) { animation-delay: .17s; }
+.stagger article:nth-child(5) { animation-delay: .22s; } .stagger article:nth-child(6) { animation-delay: .27s; }
+.stagger article:nth-child(7) { animation-delay: .32s; } .stagger article:nth-child(8) { animation-delay: .37s; }
+.stagger article:nth-child(9) { animation-delay: .42s; } .stagger article:nth-child(n+10) { animation-delay: .47s; }
+
+.anim-kedip { animation: pgKedip 1.2s ease-in-out infinite; }
+
+/* Agenda: kuliah hari ini menyala hijau, pertemuan batal berdenyut merah */
+.agenda-hari { animation: pgGlow 2.8s ease-in-out infinite; border-color: #86c9a5; }
+.agenda-sekarang { background: #f3faf6; border-color: #86c9a5 !important; animation: agendaSekarang 2s ease-in-out infinite; }
+.agenda-batal { border-color: #fca5a5 !important; animation: agendaBatal 2s ease-in-out infinite; }
+@keyframes agendaSekarang { 0%, 100% { box-shadow: 0 0 0 0 rgba(13, 92, 58, 0); } 50% { box-shadow: 0 0 14px 1px rgba(13, 92, 58, .35); } }
+@keyframes agendaBatal { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } 50% { box-shadow: 0 0 12px 1px rgba(220, 38, 38, .35); } }
+
+/* Pengingat: kurang dari 24 jam berdenyut oranye, UTS/UAS paling kuat */
+.peng-24, .peng-ujian { transition: transform .25s ease, box-shadow .25s ease; }
+.peng-24 { animation: pengOranye 1.6s ease-in-out infinite; border-color: #fdba74; }
+.peng-ujian { animation: pgGlowPenting 1.4s ease-in-out infinite; border-color: #f87171; }
+.peng-24:hover, .peng-ujian:hover { transform: scale(1.03); animation-play-state: paused; }
+@keyframes pengOranye {
+  0%, 100% { box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 0 0 0 rgba(234, 88, 12, 0); }
+  50% { box-shadow: 0 6px 22px -2px rgba(234, 88, 12, .5), 0 0 0 4px rgba(234, 88, 12, .16); }
+}
+
+/* Pengurus kelas: cincin emas-hijau berputar di sekeliling foto, membesar saat disorot */
+.cincin { position: relative; padding: 4px; border-radius: 1.25rem; overflow: hidden; isolation: isolate; transition: transform .3s ease; }
+.cincin::before { content: ''; position: absolute; inset: -60%; z-index: -1; background: conic-gradient(from 0deg, #c59b27, #0d5c3a, #fbf3dc, #0d5c3a, #c59b27); animation: cincinPutar 5s linear infinite; }
+.pengurus-kartu { transition: transform .3s ease, box-shadow .3s ease; }
+.pengurus-kartu:hover { transform: translateY(-3px); box-shadow: 0 12px 28px -6px rgba(13, 92, 58, .35); }
+.pengurus-kartu:hover .cincin { transform: scale(1.1); }
+.pengurus-kartu:hover .cincin::before { animation-duration: 1.6s; }
+@keyframes cincinPutar { to { transform: rotate(1turn); } }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
