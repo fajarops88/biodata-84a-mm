@@ -13,7 +13,7 @@ const AppState = {
   chatMessages: [], chatUnread: 0,
   kuliahTab: 'chat', materi: null, materiFilter: '', pengingat: null, pengAdmin: null,
   publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null,
-  pasar: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, pasarF: { jenis: '', kat: '', q: '' }, etCtx: 'saya', etFoto: { lama: [], baru: [] }
+  menu: { akses: {}, pesan: {} }, menuAdm: null, pasar: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, pasarF: { jenis: '', kat: '', q: '' }, etCtx: 'saya', etFoto: { lama: [], baru: [] }
 };
 
 const $ = id => document.getElementById(id);
@@ -39,7 +39,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean|pasar|pasarKontak|pasarSaya|pasarAdmin)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean|pasar|pasarKontak|pasarSaya|pasarAdmin|menuAdmin)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -98,7 +98,7 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null, pasarKontak: null, pasarSaya: null, pasarAdm: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, menuAdm: null });
   AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
@@ -282,6 +282,26 @@ const lockedHtml = (msg, aksi) => '<div class="card mx-auto max-w-lg p-8 text-ce
   + '<h2 class="mt-3 text-lg font-bold">Akses belum tersedia</h2><p class="mt-1 text-sm text-slate-600">' + esc(msg) + '</p>'
   + (aksi || '<button class="btn btn-primary mt-5" onclick="navigateTo(\'beranda\')">Kembali ke Beranda</button>') + '</div>';
 
+/* ---------- Pengaturan menu (diatur admin: semua / anggota / ditutup) ---------- */
+const MENU_NAMA = { pasar: 'Pasar', teman: 'Daftar Teman', kuliah: 'Kuliah', formulir: 'Biodata (Isi Biodata / Biodata Saya)', status: 'Status',
+  kuliah_chat: 'Kuliah › Chat', kuliah_absen: 'Kuliah › Absen', kuliah_tugas: 'Kuliah › Tugas', kuliah_materi: 'Kuliah › Materi' };
+const MENU_BAWAAN = { pasar: 'semua', teman: 'anggota', kuliah: 'anggota', formulir: 'semua', status: 'anggota', kuliah_chat: 'anggota', kuliah_absen: 'anggota', kuliah_tugas: 'anggota', kuliah_materi: 'anggota' };
+const aksesMenu = k => ((AppState.menu && AppState.menu.akses) || {})[k] || MENU_BAWAAN[k] || 'semua';
+const menuTampil = k => { const a = aksesMenu(k); return a === 'semua' || (a === 'anggota' && !!AppState.token); };
+const menuBoleh = k => AppState.isAdmin || menuTampil(k);
+function tutupHtml(k) {
+  const pes = ((AppState.menu && AppState.menu.pesan) || {})[k] || (k.indexOf('kuliah_') === 0 ? 'Bagian ini sedang ditutup oleh admin.' : 'Menu ini sedang ditutup oleh admin.');
+  return '<div class="card mx-auto max-w-lg p-8 text-center"><span class="material-symbols-outlined !text-4xl text-gold">block</span>'
+    + '<h2 class="mt-3 text-lg font-bold">' + esc((MENU_NAMA[k] || 'Menu').split(' (')[0]) + ' sedang ditutup</h2><p class="mt-1 text-sm text-slate-600">' + esc(pes) + '</p>'
+    + '<button class="btn btn-primary mt-5" onclick="navigateTo(\'beranda\')">Kembali ke Beranda</button></div>';
+}
+/** Mengembalikan HTML penghalang bila menu tidak boleh dibuka pengguna ini; null bila boleh. */
+function gerbangMenu(k) {
+  if (!MENU_NAMA[k] || AppState.isAdmin || menuTampil(k)) return null;
+  if (aksesMenu(k) === 'anggota' && !AppState.token) return lockedHtml('Menu ini khusus anggota. Silakan masuk terlebih dahulu.', '<button class="btn btn-primary mt-5" onclick="bukaLogin()">Masuk</button>');
+  return tutupHtml(k);
+}
+
 /* ---------- Router SPA ---------- */
 function navItems() {
   const it = [{ id: 'beranda', icon: 'home', label: 'Beranda' }, { id: 'pasar', icon: 'storefront', label: 'Pasar' }];
@@ -291,11 +311,12 @@ function navItems() {
   if (AppState.me) it.push({ id: 'status', icon: 'rule', label: 'Status' });
   if (AppState.isAdmin) it.push({ id: 'admin', icon: 'admin_panel_settings', label: 'Panel Admin' });
   if (AppState.isAdmin) it.push({ id: 'kelolaAbsensi', icon: 'checklist', label: 'Kelola Absensi' });
-  return it;
+  return it.filter(i => !MENU_NAMA[i.id] || menuBoleh(i.id)).map(i => (AppState.isAdmin && MENU_NAMA[i.id] && aksesMenu(i.id) === 'tutup') ? Object.assign({}, i, { tutup: true }) : i);
 }
 function renderShell() {
   const mk = extra => navItems().map(i => '<button type="button" class="nav-btn relative ' + extra + (i.id === AppState.page ? ' active' : '') + '" onclick="navigateTo(\'' + i.id + '\')"'
     + (i.id === AppState.page ? ' aria-current="page"' : '') + '><span class="material-symbols-outlined">' + i.icon + '</span>' + i.label
+    + (i.tutup ? '<span class="material-symbols-outlined !text-base" title="Disembunyikan dari pengguna">visibility_off</span>' : '')
     + (i.badge && AppState.chatUnread ? '<span class="chat-badge">' + (AppState.chatUnread > 99 ? '99+' : AppState.chatUnread) + '</span>' : '') + '</button>').join('');
   $('nav').innerHTML = mk(''); $('navMobile').innerHTML = mk('shrink-0');
   const nama = AppState.me ? AppState.me.NamaPanggilan : (AppState.isAdmin ? 'Admin' : '');
@@ -317,6 +338,8 @@ async function navigateTo(page, opts) {
   AppState.page = page; AppState.editId = opts.editId || null;
   renderShell();
   const c = $('app-container');
+  const gerbang = gerbangMenu(page);
+  if (gerbang !== null) { c.innerHTML = gerbang; window.scrollTo({ top: 0 }); return; }
   c.innerHTML = loadingHtml();
   try {
     c.innerHTML = await pages[page](opts);
@@ -474,7 +497,7 @@ pages.beranda = async () => {
     + '<div class="mt-2">' + (s ? chip(s) : '') + '</div>'
     + '<p class="mt-3 text-sm text-slate-600">' + esc(pesan[s] || 'Lengkapi biodata Anda agar admin dapat memverifikasi.') + '</p>'
     + '<div class="mt-5 grid gap-2">'
-    + (isApproved() ? '<button class="btn btn-primary" onclick="navigateTo(\'teman\')"><span class="material-symbols-outlined">groups</span>Buka Daftar Teman</button>' : '')
+    + (isApproved() && menuBoleh('teman') ? '<button class="btn btn-primary" onclick="navigateTo(\'teman\')"><span class="material-symbols-outlined">groups</span>Buka Daftar Teman</button>' : '')
     + '<button class="btn btn-ghost" onclick="navigateTo(\'' + (AppState.me ? 'status' : 'formulir') + '\')">' + (AppState.me ? 'Lihat Status' : 'Isi Biodata') + '</button></div></div>';
   const langkah = [['edit_note', '1. Isi biodata', 'Lengkapi data diri, foto, dan perkenalan singkat.'],
     ['verified_user', '2. Persetujuan admin', 'Admin memeriksa agar data hanya dilihat teman sekelas.'],
@@ -911,9 +934,10 @@ function absensiRekapHtml(d) {
 
 /* ---- Menu Kuliah: Chat, Absen, Tugas, dan Materi dalam satu halaman bertab ---- */
 const KULIAH_TABS = [['chat', 'forum', 'Chat'], ['absen', 'fact_check', 'Absen'], ['tugas', 'upload_file', 'Tugas'], ['materi', 'folder_open', 'Materi']];
+const kuliahTabBoleh = () => KULIAH_TABS.filter(t => menuBoleh('kuliah_' + t[0]));
 function kuliahTabsHtml() {
   return '<div id="kuliahTabs" class="mb-5 flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1" role="tablist" aria-label="Bagian Kuliah">'
-    + KULIAH_TABS.map(t => '<button type="button" role="tab" aria-selected="' + (AppState.kuliahTab === t[0]) + '" class="nav-btn relative flex-1 justify-center'
+    + kuliahTabBoleh().map(t => '<button type="button" role="tab" aria-selected="' + (AppState.kuliahTab === t[0]) + '" class="nav-btn relative flex-1 justify-center'
       + (AppState.kuliahTab === t[0] ? ' active' : '') + '" onclick="gantiKuliahTab(\'' + t[0] + '\')"><span class="material-symbols-outlined">' + t[1] + '</span>' + t[2]
       + (t[0] === 'chat' && AppState.chatUnread && AppState.kuliahTab !== 'chat' ? '<span class="chat-badge">' + (AppState.chatUnread > 99 ? '99+' : AppState.chatUnread) + '</span>' : '')
       + '</button>').join('') + '</div>';
@@ -924,6 +948,9 @@ function gantiKuliahTab(t) { AppState.kuliahTab = t; navigateTo('kuliah'); }
 pages.kuliah = async o => {
   if (!AppState.token) return lockedHtml('Silakan masuk terlebih dahulu.');
   if (!isApproved()) return lockedHtml('Biodata Anda belum disetujui admin, sehingga menu Kuliah belum dapat dibuka.', '<button class="btn btn-primary mt-5" onclick="navigateTo(\'status\')">Lihat Status</button>');
+  const boleh = kuliahTabBoleh();
+  if (!boleh.length) return tutupHtml('kuliah');
+  if (!boleh.some(t => t[0] === AppState.kuliahTab)) AppState.kuliahTab = boleh[0][0];
   const isi = { chat: pages.chat, absen: pages.absensi, tugas: pages.tugas, materi: pages.materi }[AppState.kuliahTab] || pages.chat;
   const html = await isi(o);
   return kuliahTabsHtml() + '<div id="kuliahBody">' + html + '</div>';
@@ -1832,6 +1859,41 @@ async function simpanKategoriPasar(ev) {
   catch (e) { setBusy(btn, false); fail(e); }
 }
 
+/* ---- Tab Menu di Panel Admin ---- */
+async function paintMenuAdmin() {
+  const body = $('adminBody'); if (!body) return;
+  body.innerHTML = loadingHtml();
+  try {
+    if (!AppState.menuAdm) AppState.menuAdm = await call('api_menuAdmin');
+    if (AppState.tab === 'Menu') renderMenuAdmin();
+  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
+}
+function renderMenuAdmin() {
+  const body = $('adminBody'); if (!body || !AppState.menuAdm) return;
+  const M = AppState.menuAdm;
+  const baris = k => '<div class="grid gap-2 border-b border-slate-100 py-3 last:border-0 md:grid-cols-12 md:items-start">'
+    + '<div class="md:col-span-3"><label class="font-semibold' + (k.indexOf('kuliah_') === 0 ? ' pl-4' : '') + '" for="mn_' + k + '">' + esc(MENU_NAMA[k]) + '</label></div>'
+    + '<div class="md:col-span-4"><select id="mn_' + k + '" class="inp">'
+    + [['semua', 'Tampil untuk semua'], ['anggota', 'Hanya anggota yang masuk'], ['tutup', 'Disembunyikan (ditutup)']].map(o => '<option value="' + o[0] + '"' + (M.akses[k] === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select></div>'
+    + '<div class="md:col-span-5"><label class="sr-only" for="mp_' + k + '">Pesan saat ditutup untuk ' + esc(MENU_NAMA[k]) + '</label>'
+    + '<input id="mp_' + k + '" class="inp" type="text" maxlength="200" value="' + esc(M.pesan[k] || '') + '" placeholder="Pesan saat ditutup (opsional)"></div></div>';
+  body.innerHTML = '<form class="card p-5" onsubmit="simpanMenuAdmin(event)"><h2 class="font-bold">Pengaturan Menu</h2>'
+    + '<p class="mt-1 text-sm text-slate-600">Atur siapa yang dapat melihat tiap menu. Beranda dan Panel Admin selalu tampil. Admin tetap dapat membuka semua menu, yang disembunyikan ditandai ikon mata tercoret.</p>'
+    + '<div class="mt-3">' + ['pasar', 'teman', 'kuliah', 'kuliah_chat', 'kuliah_absen', 'kuliah_tugas', 'kuliah_materi', 'formulir', 'status'].map(baris).join('') + '</div>'
+    + '<p class="mt-3 text-xs text-slate-500">Menu yang ditutup hilang dari navigasi dan, bila dibuka lewat tautan, menampilkan pesan di atas. Ini pengaturan tampilan, bukan pengamanan data. Pengguna yang sedang membuka aplikasi melihat perubahan setelah memuat ulang halaman.</p>'
+    + '<div class="mt-4"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">save</span>Simpan Pengaturan Menu</button></div></form>';
+}
+async function simpanMenuAdmin(ev) {
+  ev.preventDefault();
+  const btn = ev.target.querySelector('[type=submit]'), akses = {}, pesan = {};
+  Object.keys(MENU_NAMA).forEach(k => { akses[k] = $('mn_' + k).value; pesan[k] = $('mp_' + k).value.trim(); });
+  setBusy(btn, true, 'Menyimpan…');
+  try {
+    const r = await call('api_simpanMenu', { akses: akses, pesan: pesan });
+    AppState.menuAdm = r; AppState.menu = r; renderShell(); toast('Pengaturan menu disimpan.'); renderMenuAdmin();
+  } catch (e) { setBusy(btn, false); fail(e); }
+}
+
 /* ---- Panel admin ---- */
 pages.admin = async () => {
   if (!AppState.isAdmin) return lockedHtml('Halaman ini khusus admin.');
@@ -1843,14 +1905,14 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Pasar', 'Profil', 'Jadwal', 'Notifikasi'];
-  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Pasar: 'Pasar', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
+  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Pasar: 'Pasar', Menu: 'Menu', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none" data-hitung="' + k[1] + '">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Pasar', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
@@ -1859,6 +1921,7 @@ function paintAdmin() {
   if (AppState.tab === 'Pengumuman') { paintPengumumanAdmin(); return; }
   if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
   if (AppState.tab === 'Pasar') { paintPasarAdmin(); return; }
+  if (AppState.tab === 'Menu') { paintMenuAdmin(); return; }
   if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
   if (AppState.tab === 'Jadwal') { paintJadwalAdmin(); return; }
   if (AppState.tab === 'Notifikasi') { paintNotifAdmin(); return; }
@@ -2114,7 +2177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   panaskanServer();
   try {
     const b = await api('api_boot');
-    AppState.stats = b; $('appTitle').textContent = b.title; document.title = b.title;
+    AppState.stats = b; AppState.menu = b.menu || { akses: {}, pesan: {} }; $('appTitle').textContent = b.title; document.title = b.title;
     setLogo(b.logoUrl);
   } catch (e) { /* tetap lanjut; halaman menampilkan pesan bila server bermasalah */ }
   navigateTo('beranda');
