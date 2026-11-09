@@ -11,7 +11,7 @@ const AppState = {
   stats: { approved: 0 }, members: null, adminData: null,
   page: 'beranda', tab: 'Menunggu', q: '', fotoData: null, editId: null,
   chatMessages: [], chatUnread: 0,
-  kuliahTab: 'chat', materi: null, materiFilter: '', tentangTab: 'sambutan', pgFiles: { lampiran: [], instruksi: [] }, pgUnggah: 0,
+  kuliahTab: 'chat', materi: null, materiFilter: '', tentangTab: 'sambutan', pgFiles: { lampiran: [], materi: [], instruksi: [] }, pgUnggah: 0,
   publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null,
   menu: { akses: {}, pesan: {} }, menuAdm: null, pasar: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, pasarF: { jenis: '', kat: '', q: '' }, etCtx: 'saya', etFoto: { lama: [], baru: [] }
 };
@@ -1263,6 +1263,10 @@ function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal:
 /* ---- Pengumuman: satu data untuk Beranda, Instruksi Dosen, dan jadwal UTS/UAS di Agenda ---- */
 const JENIS_PG = { Umum: 'bg-emerald-100 text-emerald-800', Tugas: 'bg-amber-100 text-amber-800', UTS: 'bg-red-600 text-white', UAS: 'bg-red-600 text-white' };
 const pgAktif = p => !p.Tenggat || Date.parse(p.Tenggat) >= Date.now();
+function materiPgHtml(list) {
+  const m = (list || []).filter(f => f.materi);
+  return m.length ? '<div class="mt-3"><div class="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary-dark"><span class="material-symbols-outlined !text-base">menu_book</span>Materi</div>' + berkasHtml(m) + '</div>' : '';
+}
 function berkasHtml(list) {
   if (!list || !list.length) return '';
   return '<ul class="mt-2 space-y-1">' + list.map(f => '<li class="flex items-center gap-2 rounded-lg bg-white/80 px-2 py-1.5 text-sm ring-1 ring-slate-200">'
@@ -1296,7 +1300,7 @@ function pengumumanHtml(list) {
     + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + '</span></div>'
     + '<h3 class="mt-2 text-lg font-extrabold leading-snug">' + esc(p.Judul) + '</h3>'
     + '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p>'
-    + waktuPgHtml(p) + berkasHtml(p.Lampiran) + instruksiBoxHtml(p) + '</article>').join('');
+    + waktuPgHtml(p) + berkasHtml((p.Lampiran || []).filter(f => !f.materi)) + materiPgHtml(p.Lampiran) + instruksiBoxHtml(p) + '</article>').join('');
   return '<section class="mt-6" aria-label="Pengumuman"><div class="mb-3 flex items-center justify-between gap-3">'
     + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">campaign</span>Pengumuman</h2>'
     + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[36px]" onclick="bukaPengumumanAdmin()"><span class="material-symbols-outlined">edit_note</span>Kelola</button>' : '') + '</div>'
@@ -1320,7 +1324,41 @@ function daftarBerkasAdminHtml(bagian) {
     + '<button type="button" class="btn btn-ghost !min-h-[32px] !px-2 !text-red-700" onclick="lepasBerkasPg(\'' + bagian + '\',' + i + ')" aria-label="Lepas ' + esc(f.nama) + '"><span class="material-symbols-outlined !text-xl">close</span></button></li>').join('');
 }
 function paintBerkasPg() {
-  ['lampiran', 'instruksi'].forEach(b => { const el = $('pgBerkas_' + b); if (el) el.innerHTML = daftarBerkasAdminHtml(b); });
+  ['lampiran', 'materi', 'instruksi'].forEach(b => { const el = $('pgBerkas_' + b); if (el) el.innerHTML = daftarBerkasAdminHtml(b); });
+}
+/** Pilih file yang sudah ada di Materi Kuliah sebagai lampiran (tanpa unggah ulang). Hanya materi berupa file; tautan tidak ikut. */
+async function bukaPilihMateri(bagian) {
+  openModal('<div class="p-5"><h2 class="text-lg font-bold">Pilih dari Materi Kuliah</h2><div id="pmBody" class="mt-3">' + loadingHtml() + '</div></div>');
+  try {
+    const list = (await call('api_materi')).filter(m => m.Tipe !== 'link' && /\/d\/([\w-]+)/.test(m.Url || ''));
+    const sudah = AppState.pgFiles[bagian].map(f => f.id), mk = $('pgMatkul') ? $('pgMatkul').value : '';
+    AppState._pmList = list; AppState._pmBagian = bagian;
+    const opsi = Array.from(new Set(list.map(m => m.MataKuliah))).map(m => '<option value="' + esc(m) + '"' + (m === mk ? ' selected' : '') + '>' + esc(m) + '</option>').join('');
+    $('pmBody').innerHTML = list.length
+      ? '<label class="sr-only" for="pmFilter">Mata kuliah</label><select id="pmFilter" class="inp" onchange="paintPilihMateri()"><option value="">Semua mata kuliah</option>' + opsi + '</select>'
+        + '<ul id="pmList" class="mt-3 max-h-80 space-y-1 overflow-y-auto"></ul>'
+        + '<div class="mt-4 flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Batal</button><button type="button" class="btn btn-primary" id="pmOk" onclick="pakaiPilihMateri()">Tambahkan</button></div>'
+      : '<p class="text-sm text-slate-500">Belum ada materi berupa file. Unggah dulu di menu Kuliah › Materi.</p><div class="mt-4 flex justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Tutup</button></div>';
+    AppState._pmSudah = sudah; if (list.length) paintPilihMateri();
+  } catch (e) { closeModal(); fail(e); }
+}
+function paintPilihMateri() {
+  const f = $('pmFilter') ? $('pmFilter').value : '', ul = $('pmList'); if (!ul) return;
+  const list = AppState._pmList.filter(m => !f || m.MataKuliah === f);
+  ul.innerHTML = list.length ? list.map(m => { const id = /\/d\/([\w-]+)/.exec(m.Url)[1], ada = AppState._pmSudah.indexOf(id) > -1;
+    return '<li><label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 ring-1 ring-slate-200' + (ada ? ' opacity-60' : '') + '"><input type="checkbox" class="h-5 w-5 accent-[#0d5c3a]" data-mid="' + esc(id) + '"' + (ada ? ' checked disabled' : '') + '>'
+      + '<span class="material-symbols-outlined text-primary">' + iconTugas(m.NamaFile) + '</span><span class="min-w-0 flex-1"><span class="block truncate text-sm font-semibold">' + esc(m.Judul) + '</span>'
+      + '<span class="block truncate text-xs text-slate-500">' + esc(m.MataKuliah) + ' · ' + esc(m.NamaFile) + ' · ' + fmtUkuran(m.Ukuran) + (ada ? ' · sudah dilampirkan' : '') + '</span></span></label></li>'; }).join('')
+    : '<li class="text-sm text-slate-500">Tidak ada materi untuk mata kuliah ini.</li>';
+}
+function pakaiPilihMateri() {
+  const b = AppState._pmBagian; let n = 0;
+  document.querySelectorAll('#pmList input[data-mid]:checked:not(:disabled)').forEach(c => {
+    const m = AppState._pmList.find(x => (/\/d\/([\w-]+)/.exec(x.Url) || [])[1] === c.getAttribute('data-mid')); if (!m) return;
+    if (AppState.pgFiles[b].length >= 30) return;
+    AppState.pgFiles[b].push({ id: c.getAttribute('data-mid'), nama: m.NamaFile || m.Judul, ukuran: m.Ukuran, materi: true }); n++;
+  });
+  closeModal(); paintBerkasPg(); if (n) toast(n + ' file dari Materi ditambahkan.');
 }
 function lepasBerkasPg(bagian, i) { AppState.pgFiles[bagian].splice(i, 1); paintBerkasPg(); }
 /** Unggah file satu per satu (maks. 15 MB per file); tiap file langsung masuk ke Drive dan muncul di daftar. */
@@ -1344,7 +1382,7 @@ async function pilihBerkasPg(inp, bagian) {
 function renderPengumumanAdmin() {
   const body = $('adminBody'); if (!body || !AppState.pengumumanAdm) return;
   const rows = AppState.pengumumanAdm.rows, matkul = AppState.pengumumanAdm.matkul || [];
-  AppState.pgFiles = { lampiran: [], instruksi: [] };
+  AppState.pgFiles = { lampiran: [], materi: [], instruksi: [] };
   const opsiMk = '<option value="">Umum (tanpa mata kuliah)</option>' + matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
   const opsiJenis = [['Umum', 'Umum'], ['Tugas', 'Tugas'], ['UTS', 'UTS'], ['UAS', 'UAS']].map(j => '<option value="' + j[0] + '">' + j[1] + '</option>').join('');
   const berkas = (b, label) => '<div><label class="lbl">' + label + '</label>'
@@ -1364,6 +1402,10 @@ function renderPengumumanAdmin() {
     + '<div><label class="lbl" for="pgBerakhirJam" id="pgJamLbl">Jam berakhir (opsional)</label><input id="pgBerakhirJam" class="inp" type="time">'
     + '<p id="pgJamInfo" class="mt-1 text-xs text-slate-500"></p></div>'
     + '<div class="md:col-span-2">' + berkas('lampiran', 'Lampiran pengumuman (opsional)') + '</div>'
+    + '<div class="md:col-span-2"><label class="lbl">Materi (opsional)</label>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px]" onclick="bukaPilihMateri(\'materi\')"><span class="material-symbols-outlined">menu_book</span>Pilih dari Materi Kuliah</button>'
+    + '<p class="mt-1 text-xs text-slate-500">Pilih file yang sudah ada di menu Kuliah › Materi. Tidak diunggah ulang; tampil terpisah dari lampiran.</p>'
+    + '<ul id="pgBerkas_materi" class="mt-1 space-y-1"></ul></div>'
     + '<div id="pgInstruksiBox" class="hidden space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3 md:col-span-2">'
     + '<div><label class="lbl" for="pgInstruksi">Instruksi dosen (opsional)</label><textarea id="pgInstruksi" class="inp" rows="4" maxlength="3000" placeholder="Salin instruksi dari dosen."></textarea></div>'
     + berkas('instruksi', 'File instruksi dosen (opsional)') + '</div>'
@@ -1408,7 +1450,7 @@ function ubahPengumuman(id) {
   $('pgMatkul').value = p.MataKuliah || ''; $('pgJudul').value = p.Judul; $('pgIsi').value = p.Isi;
   $('pgMulai').value = p.Mulai ? p.Mulai.slice(0, 16) : ''; $('pgBerakhir').value = p.Berakhir || ''; $('pgBerakhirJam').value = p.BerakhirJam || '';
   $('pgInstruksi').value = p.Instruksi || ''; $('pgPenting').checked = !!p.Penting;
-  AppState.pgFiles = { lampiran: p.Lampiran.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })), instruksi: p.LampiranInstruksi.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })) };
+  AppState.pgFiles = { lampiran: p.Lampiran.filter(f => !f.materi).map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })), materi: p.Lampiran.filter(f => f.materi).map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran, materi: true })), instruksi: p.LampiranInstruksi.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })) };
   paintBerkasPg();
   $('pgJudulForm').textContent = 'Ubah Pengumuman'; $('pgTombol').textContent = 'Simpan Perubahan'; $('pgBatalUbah').classList.remove('hidden');
   $('frmPengumuman').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('pgJudul').focus();
@@ -1421,7 +1463,7 @@ async function kirimPengumuman(ev) {
   const j = $('pgJenis').value, mulai = $('pgMulai').value;
   const p = { id: $('pgId').value, jenis: j, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked,
     mulai: jenisUjian(j) && mulai ? mulai + ':00+08:00' : '', berakhir: $('pgBerakhir').value, berakhirJam: $('pgBerakhirJam').value,
-    instruksi: $('pgInstruksi').value.trim(), lampiran: AppState.pgFiles.lampiran, lampiranInstruksi: AppState.pgFiles.instruksi };
+    instruksi: $('pgInstruksi').value.trim(), lampiran: AppState.pgFiles.lampiran.concat(AppState.pgFiles.materi), lampiranInstruksi: AppState.pgFiles.instruksi };
   const ubah = !!p.id;
   setBusy(btn, true, 'Menyimpan…');
   try { AppState.pengumumanAdm = await call('api_simpanPengumuman', p); toast(ubah ? 'Pengumuman diperbarui.' : 'Pengumuman diterbitkan.'); renderPengumumanAdmin(); }
