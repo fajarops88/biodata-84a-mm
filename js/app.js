@@ -428,7 +428,16 @@ function sisaItem(it) {
   const ak = menitAkhirItem(it), k = sekarangWita();
   return ak === null ? '' : 'selesai ' + teksSisa(Math.max(1, ak - k.menit)) + ' lagi';
 }
-function sigAgenda(d) { return d ? d.items.map(statusWaktu).join('|') + '@' + sekarangWita().ymd : ''; }
+/** Item yang waktunya sudah lewat (termasuk kuliah dibatalkan/dipindah): tidak ditampilkan lagi di Agenda. */
+function agendaLewat(it) {
+  const k = sekarangWita();
+  if (it.tanggal < k.ymd) return true;
+  if (it.tanggal > k.ymd) return false;
+  if (it.ujian && it.totalHari > 1) return false; // ujian berperiode: tampil sampai tanggal berakhir (hari terakhir dihitung per hari)
+  const ak = menitAkhirItem(it);
+  return ak !== null && k.menit >= ak;
+}
+function sigAgenda(d) { return d ? d.items.map(it => statusWaktu(it) + (agendaLewat(it) ? 'x' : '')).join('|') + '@' + sekarangWita().ymd : ''; }
 function agendaItemHtml(it, admin, hariIni) {
   const jam = it.jamMulai ? esc(it.jamMulai) + (it.jamSelesai ? '<span class="block text-xs font-medium text-slate-500">s.d. ' + esc(it.jamSelesai) + '</span>' : '') : 'Seharian';
   let chips = '', judul = '', info = '', redup = '';
@@ -479,7 +488,11 @@ function agendaBodyHtml(d, admin) {
       + '<p class="mt-2">Tidak ada kuliah atau ujian pada pekan ini.</p></div>';
   }
   const per = {};
-  d.items.forEach(it => { (per[it.tanggal] = per[it.tanggal] || []).push(it); });
+  d.items.filter(it => !agendaLewat(it)).forEach(it => { (per[it.tanggal] = per[it.tanggal] || []).push(it); });
+  if (!Object.keys(per).length) {
+    return '<div class="card p-8 text-center text-sm text-slate-500"><span class="material-symbols-outlined !text-4xl text-slate-300">event_available</span>'
+      + '<p class="mt-2">Tidak ada agenda yang akan datang pada pekan ini.</p></div>';
+  }
   return Object.keys(per).sort().map(tgl => '<div class="card p-4"><h3 class="mb-2 flex flex-wrap items-center gap-2 text-sm font-bold">' + esc(tglYmd(tgl))
     + (tgl === d.hariIni ? '<span class="chip bg-primary text-white">Hari ini</span>' : '') + '</h3>'
     + '<div class="space-y-2">' + per[tgl].map(it => agendaItemHtml(it, admin, d.hariIni)).join('') + '</div></div>').join('');
