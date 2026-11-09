@@ -81,12 +81,16 @@
   #printArea th, #printArea td { border: 1px solid #333; padding: 6px 8px; text-align: left; }
 }
 
+/* Kartu Pengumuman: mencolok. Biasa = hijau menyala; Penting = merah menyala. Berdenyut terus, membesar saat disorot. */
+.pg-biasa { background: linear-gradient(135deg, #ecfdf5, #fff 65%); border: 2px solid #10b981; }
+.pg-penting { background: linear-gradient(135deg, #fef2f2, #fff 65%); border: 2px solid #ef4444; }
+.pg-pita { margin: -1rem -1rem .75rem; padding: .45rem 1rem; border-radius: .85rem .85rem 0 0; display: flex; align-items: center; gap: .4rem; color: #fff; font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: linear-gradient(90deg, #0d5c3a, #10b981); }
+.pg-penting .pg-pita { background: linear-gradient(90deg, #b91c1c, #f97316); animation: pgKedip 1.2s ease-in-out infinite; }
 /* Kartu Pengumuman: menyala berdenyut terus-menerus, membesar saat disorot */
 .pg-kartu { position: relative; transition: transform .25s ease, box-shadow .25s ease; animation: pgGlow 2.6s ease-in-out infinite; cursor: default; }
 .pg-kartu:hover, .pg-kartu:focus-within { transform: scale(1.04); z-index: 5; animation-play-state: paused; box-shadow: 0 14px 34px -6px rgba(13, 92, 58, .45), 0 0 0 3px rgba(197, 155, 39, .55); }
-.pg-penting { animation-name: pgGlowPenting; animation-duration: 1.8s; border-color: #fca5a5; }
+.pg-penting { animation-name: pgGlowPenting; animation-duration: 1.8s; }
 .pg-penting:hover, .pg-penting:focus-within { box-shadow: 0 14px 34px -6px rgba(220, 38, 38, .45), 0 0 0 3px rgba(220, 38, 38, .5); }
-.pg-penting .chip { animation: pgKedip 1.2s ease-in-out infinite; }
 @keyframes pgGlow {
   0%, 100% { box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 0 0 0 rgba(13, 92, 58, 0); }
   50% { box-shadow: 0 6px 22px -2px rgba(13, 92, 58, .35), 0 0 0 4px rgba(13, 92, 58, .12); }

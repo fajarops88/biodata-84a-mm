@@ -11,7 +11,7 @@ const AppState = {
   stats: { approved: 0 }, members: null, adminData: null,
   page: 'beranda', tab: 'Menunggu', q: '', fotoData: null, editId: null,
   chatMessages: [], chatUnread: 0,
-  kuliahTab: 'chat', materi: null, materiFilter: '', pengingat: null, pengAdmin: null,
+  kuliahTab: 'chat', materi: null, materiFilter: '', tentangTab: 'sambutan', instruksi: null, instruksiFilter: '', pgFiles: { lampiran: [], instruksi: [] }, pgUnggah: 0,
   publik: null, agenda: { pub: null, adm: null }, profilAdmin: null, jadwalAdmin: null,
   menu: { akses: {}, pesan: {} }, menuAdm: null, pasar: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, pasarF: { jenis: '', kat: '', q: '' }, etCtx: 'saya', etFoto: { lama: [], baru: [] }
 };
@@ -39,7 +39,7 @@ const FIELD_DEFS = [ // [nama, label, ikon, contoh, tipe]
 /* ---------- Komunikasi dengan server (fetch ke Google Apps Script) ---------- */
 const GAS_URL = (window.APP_CONFIG && window.APP_CONFIG.GAS_URL) || '';
 const WAKTU_HABIS_MS = 120000; // unggah file besar butuh waktu
-const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|pengingat|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean|pasar|pasarKontak|pasarSaya|pasarAdmin|menuAdmin)$/;
+const BACA_SAJA = /^api_(boot|me|members|matkul|tugasSaya|chatPesan|materi|instruksi|pengumuman|pengumumanAdmin|publik|agenda|notifKonfig|notifAudience|blastDaftar|notifAntrean|pasar|pasarKontak|pasarSaya|pasarAdmin|menuAdmin)$/;
 const _inflight = {};
 let _epochTulis = 0;
 
@@ -98,7 +98,7 @@ function applySession(r) {
 }
 function resetSession() {
   stopChatPolling();
-  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, pengingat: null, pengAdmin: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, menuAdm: null });
+  Object.assign(AppState, { token: null, email: null, isAdmin: false, isUtama: false, me: null, members: null, adminData: null, fotoData: null, chatMessages: [], chatUnread: 0, materi: null, instruksi: null, profilAdmin: null, jadwalAdmin: null, notifCfg: null, pengumuman: null, pengumumanAdm: null, notifAud: null, blastList: null, blastPilih: null, notifAnt: null, pasarKontak: null, pasarSaya: null, pasarAdm: null, menuAdm: null });
   AppState.agenda.adm = null;
 }
 function handleAuthError(e) {
@@ -283,9 +283,9 @@ const lockedHtml = (msg, aksi) => '<div class="card mx-auto max-w-lg p-8 text-ce
   + (aksi || '<button class="btn btn-primary mt-5" onclick="navigateTo(\'beranda\')">Kembali ke Beranda</button>') + '</div>';
 
 /* ---------- Pengaturan menu (diatur admin: semua / anggota / ditutup) ---------- */
-const MENU_NAMA = { pasar: 'Pasar', teman: 'Daftar Teman', kuliah: 'Kuliah', formulir: 'Biodata (Isi Biodata / Biodata Saya)', status: 'Status',
-  kuliah_chat: 'Kuliah › Chat', kuliah_absen: 'Kuliah › Absen', kuliah_tugas: 'Kuliah › Tugas', kuliah_materi: 'Kuliah › Materi' };
-const MENU_BAWAAN = { pasar: 'semua', teman: 'anggota', kuliah: 'anggota', formulir: 'semua', status: 'anggota', kuliah_chat: 'anggota', kuliah_absen: 'anggota', kuliah_tugas: 'anggota', kuliah_materi: 'anggota' };
+const MENU_NAMA = { tentang: 'Tentang', pasar: 'Pasar', teman: 'Daftar Teman', kuliah: 'Kuliah', formulir: 'Biodata (Isi Biodata / Biodata Saya)', status: 'Status',
+  kuliah_chat: 'Kuliah › Chat', kuliah_absen: 'Kuliah › Absen', kuliah_tugas: 'Kuliah › Tugas', kuliah_instruksi: 'Kuliah › Instruksi', kuliah_materi: 'Kuliah › Materi' };
+const MENU_BAWAAN = { tentang: 'semua', kuliah_instruksi: 'anggota', pasar: 'anggota', teman: 'anggota', kuliah: 'anggota', formulir: 'semua', status: 'anggota', kuliah_chat: 'anggota', kuliah_absen: 'anggota', kuliah_tugas: 'anggota', kuliah_materi: 'anggota' };
 const aksesMenu = k => ((AppState.menu && AppState.menu.akses) || {})[k] || MENU_BAWAAN[k] || 'semua';
 const menuTampil = k => { const a = aksesMenu(k); return a === 'semua' || (a === 'anggota' && !!AppState.token); };
 const menuBoleh = k => AppState.isAdmin || menuTampil(k);
@@ -304,7 +304,7 @@ function gerbangMenu(k) {
 
 /* ---------- Router SPA ---------- */
 function navItems() {
-  const it = [{ id: 'beranda', icon: 'home', label: 'Beranda' }, { id: 'pasar', icon: 'storefront', label: 'Pasar' }];
+  const it = [{ id: 'beranda', icon: 'home', label: 'Beranda' }, { id: 'tentang', icon: 'info', label: 'Tentang' }, { id: 'pasar', icon: 'storefront', label: 'Pasar' }];
   if (AppState.token && isApproved()) it.push({ id: 'teman', icon: 'groups', label: 'Daftar Teman' });
   if (AppState.token && isApproved()) it.push({ id: 'kuliah', icon: 'menu_book', label: 'Kuliah', badge: true });
   it.push({ id: 'formulir', icon: 'badge', label: AppState.me ? 'Biodata Saya' : 'Isi Biodata' });
@@ -333,7 +333,7 @@ function renderShell() {
 async function navigateTo(page, opts) {
   opts = opts || {};
   // Tugas, Absensi, Chat, dan Materi kini tab di dalam menu Kuliah; pemanggilan lama tetap diarahkan ke tab yang sesuai.
-  const subKuliah = { chat: 'chat', absensi: 'absen', tugas: 'tugas', materi: 'materi' };
+  const subKuliah = { chat: 'chat', absensi: 'absen', tugas: 'tugas', instruksi: 'instruksi', materi: 'materi' };
   if (subKuliah[page]) { AppState.kuliahTab = subKuliah[page]; page = 'kuliah'; }
   AppState.page = page; AppState.editId = opts.editId || null;
   renderShell();
@@ -506,6 +506,7 @@ function paintAgenda(mode) {
 }
 /** Tiap 30 detik: gambar ulang agenda hanya bila status berubah (mulai/selesai), kalau tidak cukup segarkan teks sisa waktu. */
 function tickAgenda() {
+  document.querySelectorAll('#pgDaftar [data-tenggat]').forEach(el => { const t = el.getAttribute('data-tenggat'); if (t && Date.parse(t) < Date.now()) el.remove(); });
   ['pub', 'adm'].forEach(mode => {
     const box = $('agenda_' + mode); if (!box || !AppState.agenda[mode]) return;
     if (box.dataset.sig !== sigAgenda(AppState.agenda[mode])) { paintAgenda(mode); return; }
@@ -529,47 +530,36 @@ async function gantiPekan(mode, arah) {
   } catch (e) { if (box) box.style.opacity = ''; fail(e); }
 }
 
+/* Beranda publik: hanya Pengumuman dan Agenda. Sambutan, Visi Misi, Struktur ada di halaman Tentang. */
 pages.beranda = async () => {
-  const s = AppState.me && AppState.me.Status;
-  const anggota = !!(AppState.token && isApproved());
-  // Data publik dan pengingat dimuat bersamaan; satu yang gagal tidak menghalangi Beranda.
-  const [rPub, rAgenda, rPeng, rPeng2] = await Promise.allSettled([
-    api('api_publik'), api('api_agenda', ''), anggota ? call('api_pengingat') : Promise.resolve(null),
-    api('api_pengumuman') // pengumuman terbuka untuk umum (tanpa login)
-  ]);
-  if (rPeng.status === 'rejected' && rPeng.reason && rPeng.reason.message === 'SESI_HABIS') throw rPeng.reason;
-  AppState.publik = rPub.status === 'fulfilled' ? rPub.value : null;
+  // Pengumuman dan agenda dimuat bersamaan; satu yang gagal tidak menghalangi yang lain.
+  const [rAgenda, rPeng] = await Promise.allSettled([api('api_agenda', ''), api('api_pengumuman')]);
   AppState.agenda.pub = rAgenda.status === 'fulfilled' ? rAgenda.value : null;
-  AppState.pengingat = rPeng.status === 'fulfilled' ? rPeng.value : null;
-  AppState.pengumuman = rPeng2.status === 'fulfilled' ? rPeng2.value : null;
-  const pengHtml = anggota && AppState.pengingat ? pengingatDashboardHtml(AppState.pengingat) : '';
+  AppState.pengumuman = rPeng.status === 'fulfilled' ? rPeng.value : null;
+  return pengumumanHtml(AppState.pengumuman) + agendaSectionHtml(AppState.agenda.pub);
+};
 
-  const pesan = { Menunggu: 'Biodata Anda sedang menunggu persetujuan admin.', Disetujui: 'Biodata Anda sudah disetujui. Silakan kenali teman sekelas.', Ditolak: 'Biodata Anda perlu diperbaiki. Lihat catatan admin.' };
-  const panelAnggota = '<div class="card p-5 shadow-lg"><p class="text-sm text-slate-500">Halo,</p>'
-    + '<h2 class="text-xl font-bold">' + esc(AppState.me ? AppState.me.NamaPanggilan : 'Admin') + '</h2>'
-    + '<div class="mt-2">' + (s ? chip(s) : '') + '</div>'
-    + '<p class="mt-3 text-sm text-slate-600">' + esc(pesan[s] || 'Lengkapi biodata Anda agar admin dapat memverifikasi.') + '</p>'
-    + '<div class="mt-5 grid gap-2">'
-    + (isApproved() && menuBoleh('teman') ? '<button class="btn btn-primary" onclick="navigateTo(\'teman\')"><span class="material-symbols-outlined">groups</span>Buka Daftar Teman</button>' : '')
-    + '<button class="btn btn-ghost" onclick="navigateTo(\'' + (AppState.me ? 'status' : 'formulir') + '\')">' + (AppState.me ? 'Lihat Status' : 'Isi Biodata') + '</button></div></div>';
-  const langkah = [['edit_note', '1. Isi biodata', 'Lengkapi data diri, foto, dan perkenalan singkat.'],
-    ['verified_user', '2. Persetujuan admin', 'Admin memeriksa agar data hanya dilihat teman sekelas.'],
-    ['groups', '3. Kenali teman', 'Cari dan lihat profil serta kontak teman yang disetujui.']];
+/* ---------- Tentang: Sambutan Ketua, Visi dan Misi, Struktur Organisasi (satu halaman per bagian) ---------- */
+const TENTANG_TABS = [['sambutan', 'campaign', 'Sambutan Ketua'], ['visimisi', 'visibility', 'Visi dan Misi'], ['struktur', 'account_tree', 'Struktur Organisasi']];
+function tentangTabsHtml() {
+  return '<div id="tentangTabs" class="mb-2 flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1" role="tablist" aria-label="Bagian Tentang">'
+    + TENTANG_TABS.map(t => '<button type="button" role="tab" aria-selected="' + (AppState.tentangTab === t[0]) + '" class="nav-btn flex-1 justify-center' + (AppState.tentangTab === t[0] ? ' active' : '')
+      + '" onclick="gantiTentangTab(\'' + t[0] + '\')"><span class="material-symbols-outlined">' + t[1] + '</span>' + t[2] + '</button>').join('') + '</div>';
+}
+function tentangIsiHtml() {
   const P = AppState.publik;
-  return '<section class="card overflow-hidden"><div class="h-1.5 bg-gradient-to-r from-primary via-emerald-600 to-gold"></div>'
-    + '<div class="grid items-center gap-8 p-6 md:p-10 lg:grid-cols-12"><div class="' + (AppState.token ? 'lg:col-span-7' : 'lg:col-span-12') + '">'
-    + '<span class="chip bg-gold-soft text-amber-800"><span class="material-symbols-outlined !text-base">school</span>Magister Manajemen · Unissula</span>'
-    + '<h1 class="mt-4 text-3xl font-extrabold tracking-tight text-primary-dark md:text-4xl">Portal Kelas 84A MM</h1>'
-    + '<p class="mt-1 font-semibold text-amber-800">Biodata · Agenda · Kuliah · Pasar</p>'
-    + '<p class="mt-3 leading-relaxed text-slate-600">Isi biodata Anda, lalu kenali teman-teman sekelas. Nomor HP dan email hanya terlihat oleh anggota yang sudah disetujui admin.</p>'
-    + '<p class="mt-4 text-sm text-slate-500"><strong class="text-primary" data-hitung="' + (AppState.stats.approved || 0) + '">' + (AppState.stats.approved || 0) + '</strong> teman sudah bergabung</p></div>'
-    + (AppState.token ? '<div class="lg:col-span-5">' + panelAnggota + '</div>' : '') + '</div></section>'
-    + pengumumanHtml(AppState.pengumuman)
-    + pengHtml
-    + (P ? sambutanHtml(P) + visiMisiHtml(P) + strukturHtml(P) : '')
-    + agendaSectionHtml(AppState.agenda.pub)
-    + (AppState.token ? '' : '<section class="mt-6 grid gap-4 md:grid-cols-3">' + langkah.map(l => '<div class="card p-5"><span class="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-primary"><span class="material-symbols-outlined">' + l[0] + '</span></span>'
-      + '<h3 class="mt-3 font-bold">' + l[1] + '</h3><p class="mt-1 text-sm text-slate-600">' + l[2] + '</p></div>').join('') + '</section>');
+  if (!P) return '<div class="card mt-6 p-6 text-center text-sm text-slate-500">Data belum dapat dimuat. Muat ulang halaman sebentar lagi.</div>';
+  return { sambutan: sambutanHtml, visimisi: visiMisiHtml, struktur: strukturHtml }[AppState.tentangTab](P);
+}
+function gantiTentangTab(t) {
+  AppState.tentangTab = t;
+  const tabs = $('tentangTabs'), isi = $('tentangIsi'); if (!tabs || !isi) return;
+  tabs.outerHTML = tentangTabsHtml(); $('tentangIsi').innerHTML = tentangIsiHtml();
+}
+pages.tentang = async () => {
+  try { AppState.publik = await api('api_publik'); } catch (e) { AppState.publik = null; }
+  return '<div class="mb-1"><h1 class="text-2xl font-extrabold text-primary-dark">Tentang Kelas 84A MM</h1><p class="text-sm text-slate-500">Magister Manajemen · Unissula</p></div>'
+    + tentangTabsHtml() + '<div id="tentangIsi">' + tentangIsiHtml() + '</div>';
 };
 
 /** Angka naik dari nol saat halaman pertama tampil (tanpa animasi bila pengguna mematikan gerak). */
@@ -986,7 +976,7 @@ function absensiRekapHtml(d) {
 }
 
 /* ---- Menu Kuliah: Chat, Absen, Tugas, dan Materi dalam satu halaman bertab ---- */
-const KULIAH_TABS = [['chat', 'forum', 'Chat'], ['absen', 'fact_check', 'Absen'], ['tugas', 'upload_file', 'Tugas'], ['materi', 'folder_open', 'Materi']];
+const KULIAH_TABS = [['chat', 'forum', 'Chat'], ['absen', 'fact_check', 'Absen'], ['tugas', 'upload_file', 'Tugas'], ['instruksi', 'assignment', 'Instruksi'], ['materi', 'folder_open', 'Materi']];
 const kuliahTabBoleh = () => KULIAH_TABS.filter(t => menuBoleh('kuliah_' + t[0]));
 function kuliahTabsHtml() {
   return '<div id="kuliahTabs" class="mb-5 flex gap-1 overflow-x-auto rounded-xl bg-slate-200/70 p-1" role="tablist" aria-label="Bagian Kuliah">'
@@ -1004,12 +994,12 @@ pages.kuliah = async o => {
   const boleh = kuliahTabBoleh();
   if (!boleh.length) return tutupHtml('kuliah');
   if (!boleh.some(t => t[0] === AppState.kuliahTab)) AppState.kuliahTab = boleh[0][0];
-  const isi = { chat: pages.chat, absen: pages.absensi, tugas: pages.tugas, materi: pages.materi }[AppState.kuliahTab] || pages.chat;
+  const isi = { chat: pages.chat, absen: pages.absensi, tugas: pages.tugas, instruksi: pages.instruksi, materi: pages.materi }[AppState.kuliahTab] || pages.chat;
   const html = await isi(o);
   return kuliahTabsHtml() + '<div id="kuliahBody">' + html + '</div>';
 };
 after.kuliah = o => {
-  const f = { chat: after.chat, absen: after.absensi, tugas: after.tugas, materi: after.materi }[AppState.kuliahTab];
+  const f = { chat: after.chat, absen: after.absensi, tugas: after.tugas, instruksi: after.instruksi, materi: after.materi }[AppState.kuliahTab];
   if (f) f(o);
 };
 
@@ -1109,13 +1099,7 @@ async function hapusMateri(id) {
   catch (e) { closeModal(); fail(e); }
 }
 
-/* ---- Pengingat (kartu di Beranda untuk semua anggota; dikelola admin di Panel Admin) ---- */
-const JENIS_PENG = {
-  Kuliah: { icon: 'event', cls: 'bg-emerald-100 text-emerald-800' },
-  Tugas: { icon: 'assignment_late', cls: 'bg-amber-100 text-amber-800' },
-  UTS: { icon: 'quiz', cls: 'bg-red-600 text-white' },
-  UAS: { icon: 'quiz', cls: 'bg-red-600 text-white' }
-};
+/* ---- Waktu (WITA) ---- */
 const WITA = 'Asia/Makassar';
 const ymdWita = d => d.toLocaleDateString('en-CA', { timeZone: WITA });
 function fmtWaktu(iso) {
@@ -1132,117 +1116,8 @@ function hitungMundur(iso) {
   const teks = hari <= 0 ? 'Hari ini, ' + (jam >= 1 ? jam + ' jam lagi' : menit + ' menit lagi') : hari === 1 ? 'Besok' : hari + ' hari lagi';
   return { teks: teks, urgent: selisih < 3 * 86400000, jam24: selisih < 86400000 };
 }
-/* Tugas ber-tanggal-berakhir: hitung mundur ke akhir hari berakhir (23.59 WITA), bukan ke waktu mulai. */
 const jenisUjian = j => j === 'UTS' || j === 'UAS';
-function targetPeng(p) {
-  if (p.Jenis === 'Tugas' && p.Berakhir) return p.Berakhir + 'T23:59:00+08:00';
-  if (jenisUjian(p.Jenis)) {
-    const akhir = p.Berakhir ? p.Berakhir + 'T23:59:00+08:00' : (p.JamSelesai ? String(p.Waktu).slice(0, 10) + 'T' + p.JamSelesai + ':00+08:00' : '');
-    if (akhir && Date.now() >= Date.parse(p.Waktu)) return akhir;
-  }
-  return p.Waktu;
-}
-const tglBerakhir = ymd => new Date(ymd + 'T12:00:00+08:00').toLocaleDateString('id-ID', { timeZone: WITA, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-function waktuPengText(p) {
-  if ((p.Jenis === 'Tugas' || jenisUjian(p.Jenis)) && p.Berakhir) return 'Mulai ' + fmtWaktu(p.Waktu) + ' · berakhir ' + tglBerakhir(p.Berakhir);
-  if (jenisUjian(p.Jenis) && p.JamSelesai) return fmtWaktu(p.Waktu) + ' – ' + p.JamSelesai;
-  return fmtWaktu(p.Waktu);
-}
-function pengingatDashboardHtml(list) {
-  const kartu = list.map(p => {
-    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, m = hitungMundur(targetPeng(p));
-    const ujian = jenisUjian(p.Jenis) && m.teks !== 'Sudah lewat';
-    return '<article class="card flex items-start gap-3 p-4' + (m.urgent ? ' ring-2 ring-red-300' : '') + (ujian ? ' peng-ujian' : m.jam24 ? ' peng-24' : '') + '">'
-      + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
-      + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
-      + (m.urgent ? '<span class="chip bg-red-100 text-red-700">Segera</span>' : '') + '</div>'
-      + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
-      + (p.MataKuliah ? '<p class="text-sm text-slate-600">' + esc(p.MataKuliah) + '</p>' : '')
-      + '<p class="text-xs text-slate-500">' + esc(waktuPengText(p)) + '</p>'
-      + (p.Catatan ? '<p class="mt-1 text-sm text-slate-600">' + esc(p.Catatan) + '</p>' : '') + '</div>'
-      + '<div class="shrink-0 text-right text-sm font-bold ' + (m.jam24 ? 'anim-kedip ' : '') + (m.urgent ? 'text-red-700' : 'text-primary') + '">' + esc(m.teks) + '</div></article>';
-  }).join('');
-  return '<section class="mt-6" aria-label="Pengingat"><div class="mb-3 flex items-center justify-between gap-3">'
-    + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">notifications_active</span>Pengingat</h2>'
-    + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[36px]" onclick="bukaPengingatAdmin()"><span class="material-symbols-outlined">edit_calendar</span>Kelola</button>' : '') + '</div>'
-    + (list.length ? '<div class="grid gap-3 md:grid-cols-2">' + kartu + '</div>'
-      : '<div class="card p-6 text-center text-sm text-slate-500">Tidak ada pengingat untuk 14 hari ke depan.</div>') + '</section>';
-}
-function bukaPengingatAdmin() { AppState.tab = 'Pengingat'; AppState.pengAdmin = null; navigateTo('admin'); }
 
-/* ---- Pengingat: tab di Panel Admin ---- */
-async function paintPengingatAdmin() {
-  const body = $('adminBody'); if (!body) return;
-  body.innerHTML = loadingHtml();
-  try {
-    if (!AppState.pengAdmin) AppState.pengAdmin = await call('api_pengingatAdmin');
-    if (AppState.tab === 'Pengingat') renderPengingatAdmin();
-  } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
-}
-function renderPengingatAdmin() {
-  const body = $('adminBody'); if (!body || !AppState.pengAdmin) return;
-  const d = AppState.pengAdmin, kini = Date.now();
-  const opsiMk = '<option value="">Umum (semua mata kuliah)</option>' + d.matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
-  const opsiJenis = ['Kuliah', 'Tugas', 'UTS', 'UAS'].map(j => '<option value="' + j + '">' + j + '</option>').join('');
-  const form = '<form class="card mb-4 grid gap-3 p-5 md:grid-cols-2" onsubmit="kirimPengingat(event)"><h2 class="font-bold md:col-span-2">Tambah Pengingat</h2>'
-    + '<div><label class="lbl" for="pgJenis">Jenis</label><select id="pgJenis" class="inp" required onchange="aturFormPengingat()">' + opsiJenis + '</select></div>'
-    + '<div><label class="lbl" for="pgMatkul">Mata kuliah</label><select id="pgMatkul" class="inp">' + opsiMk + '</select></div>'
-    + '<div class="md:col-span-2"><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="150" required placeholder="Contoh: UTS Manajemen Keuangan"></div>'
-    + '<div><label class="lbl" for="pgWaktu" id="pgWaktuLbl">Tanggal dan jam (WITA)</label><input id="pgWaktu" class="inp" type="datetime-local" required></div>'
-    + '<div id="pgBerakhirBox" class="hidden"><label class="lbl" for="pgBerakhir">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
-    + '<p class="mt-1 text-xs text-slate-500" id="pgBerakhirInfo">Tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.</p></div>'
-    + '<div id="pgJamSelesaiBox" class="hidden"><label class="lbl" for="pgJamSelesai">Jam selesai (opsional)</label><input id="pgJamSelesai" class="inp" type="time">'
-    + '<p class="mt-1 text-xs text-slate-500">Untuk ujian satu hari. Kosong = 2 jam dari jam mulai. Ujian berperiode (ada tanggal berakhir) menyala seharian.</p></div>'
-    + '<div><label class="lbl" for="pgCatatan">Catatan (opsional)</label><input id="pgCatatan" class="inp" type="text" maxlength="300" placeholder="Contoh: Ruang 3.2, bawa kalkulator"></div>'
-    + '<div class="md:col-span-2"><button type="submit" class="btn btn-primary w-full sm:w-auto"><span class="material-symbols-outlined">add_alert</span>Simpan Pengingat</button></div></form>';
-  const daftar = d.rows.length ? d.rows.map(p => {
-    const j = JENIS_PENG[p.Jenis] || JENIS_PENG.Kuliah, lewat = Date.parse(targetPeng(p)) < kini;
-    return '<article class="card flex items-center gap-3 p-4' + (lewat ? ' opacity-60' : '') + '">'
-      + '<span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl ' + j.cls + '"><span class="material-symbols-outlined">' + j.icon + '</span></span>'
-      + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="chip ' + j.cls + '">' + esc(p.Jenis) + '</span>'
-      + (lewat ? '<span class="chip bg-slate-100 text-slate-600">Sudah lewat</span>' : '') + '</div>'
-      + '<h3 class="truncate font-bold">' + esc(p.Judul) + '</h3>'
-      + '<p class="text-xs text-slate-500">' + esc(waktuPengText(p)) + (p.MataKuliah ? ' · ' + esc(p.MataKuliah) : '') + '</p></div>'
-      + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengingat(\'' + p.ID + '\')" aria-label="Hapus pengingat"><span class="material-symbols-outlined">delete</span></button></article>';
-  }).join('') : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">notifications_off</span><p class="mt-2">Belum ada pengingat. Tambahkan jadwal kuliah, tenggat tugas, UTS, atau UAS.</p></div>';
-  body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>'
-    + '<p class="mt-3 text-xs text-slate-400">Beranda hanya menampilkan pengingat yang waktunya belum lewat dan jatuh dalam 14 hari ke depan. Tugas ber-tanggal-berakhir tampil sampai akhir tanggal berakhir.</p>';
-}
-/** Isian tanggal berakhir hanya muncul untuk jenis Tugas; label waktu menjadi "mulai tampil". */
-function aturFormPengingat() {
-  const jenis = $('pgJenis') && $('pgJenis').value, tugas = jenis === 'Tugas', ujian = jenisUjian(jenis);
-  const box = $('pgBerakhirBox'); if (!box) return;
-  box.classList.toggle('hidden', !(tugas || ujian));
-  $('pgJamSelesaiBox').classList.toggle('hidden', !ujian);
-  if (!(tugas || ujian) && $('pgBerakhir')) $('pgBerakhir').value = '';
-  if (!ujian && $('pgJamSelesai')) $('pgJamSelesai').value = '';
-  $('pgBerakhirInfo').textContent = ujian ? 'Isi bila ujian berlangsung beberapa hari (misal 9–13 November). Kosongkan untuk ujian satu hari.' : 'Tampil di Beranda dari tanggal mulai sampai akhir hari ini, lalu hilang otomatis. Kosongkan bila tidak ada.';
-  $('pgWaktuLbl').textContent = (tugas || ujian) ? 'Tanggal dan jam mulai (WITA)' : 'Tanggal dan jam (WITA)';
-}
-async function kirimPengingat(ev) {
-  ev.preventDefault();
-  const btn = ev.target.querySelector('[type=submit]');
-  const w = $('pgWaktu').value;
-  if (!w) return toast('Tanggal dan jam wajib diisi.', 'error');
-  const p = { jenis: $('pgJenis').value, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), waktu: w + ':00+08:00', catatan: $('pgCatatan').value.trim(),
-    berakhir: ($('pgJenis').value === 'Tugas' || jenisUjian($('pgJenis').value)) ? $('pgBerakhir').value : '',
-    jamSelesai: jenisUjian($('pgJenis').value) ? $('pgJamSelesai').value : '' };
-  setBusy(btn, true, 'Menyimpan…');
-  try { AppState.pengAdmin = await call('api_tambahPengingat', p); toast('Pengingat ditambahkan.'); renderPengingatAdmin(); }
-  catch (e) { setBusy(btn, false); fail(e); }
-}
-function konfirmasiHapusPengingat(id) {
-  openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-red-100 text-red-700"><span class="material-symbols-outlined">delete_forever</span></span>'
-    + '<div><h2 class="text-lg font-bold">Hapus pengingat?</h2><p class="text-sm text-slate-600">Pengingat ini tidak akan tampil lagi di Beranda.</p></div></div>'
-    + '<div class="mt-5 flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()" data-autofocus>Batal</button>'
-    + '<button class="btn btn-danger" onclick="hapusPengingat(\'' + id + '\')">Ya, hapus</button></div></div>');
-}
-async function hapusPengingat(id) {
-  try { AppState.pengAdmin = await call('api_hapusPengingat', id); closeModal(); toast('Pengingat dihapus.'); renderPengingatAdmin(); }
-  catch (e) { closeModal(); fail(e); }
-}
-
-/* ---- Profil Kelas: tab di Panel Admin (sambutan, visi, misi, pengurus) ---- */
 async function paintProfilAdmin() {
   const body = $('adminBody'); if (!body) return;
   body.innerHTML = loadingHtml();
@@ -1316,7 +1191,7 @@ function renderJadwalAdmin() {
     : '<div class="card p-8 text-center text-sm text-slate-500"><span class="material-symbols-outlined !text-4xl text-slate-300">event_repeat</span><p class="mt-2">Belum ada jadwal. Isi sekali, lalu Agenda terbentuk otomatis tiap minggu.</p></div>';
   body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>'
     + '<h2 class="mb-1 mt-8 flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined text-gold">calendar_month</span>Atur Pertemuan per Pekan</h2>'
-    + '<p class="mb-3 text-xs text-slate-500">Batalkan atau geser satu pertemuan tanpa mengubah jadwal tetapnya. UTS dan UAS diisi lewat tab Pengingat dan otomatis tampil di Agenda.</p>'
+    + '<p class="mb-3 text-xs text-slate-500">Batalkan atau geser satu pertemuan tanpa mengubah jadwal tetapnya. UTS dan UAS diisi lewat tab Pengumuman (jenis UTS/UAS) dan otomatis tampil di Agenda.</p>'
     + '<div id="agenda_adm" data-sig="' + esc(sigAgenda(AppState.agenda.adm)) + '">' + agendaBoxHtml('adm', AppState.agenda.adm) + '</div>';
 }
 async function kirimJadwal(ev) {
@@ -1385,18 +1260,47 @@ function kirimGeserPertemuan(jid, tgl, form) {
 function pulihPertemuan(jid, tgl) { kirimAturPertemuan({ jadwalId: jid, tanggal: tgl, aksi: 'pulih' }); }
 
 /* ---- Pengumuman kelas: kartu di Beranda (anggota) dan tab di Panel Admin ---- */
+/* ---- Pengumuman: satu data untuk Beranda, Instruksi Dosen (menu Kuliah), dan jadwal UTS/UAS di Agenda ---- */
+const JENIS_PG = { Umum: 'bg-emerald-100 text-emerald-800', Tugas: 'bg-amber-100 text-amber-800', UTS: 'bg-red-600 text-white', UAS: 'bg-red-600 text-white' };
+const pgAktif = p => !p.Tenggat || Date.parse(p.Tenggat) >= Date.now();
+function berkasHtml(list) {
+  if (!list || !list.length) return '';
+  return '<ul class="mt-2 space-y-1">' + list.map(f => '<li class="flex items-center gap-2 rounded-lg bg-white/80 px-2 py-1.5 text-sm ring-1 ring-slate-200">'
+    + '<span class="material-symbols-outlined text-primary">' + iconTugas(f.nama) + '</span>'
+    + '<a class="min-w-0 flex-1 truncate font-semibold text-primary hover:underline" target="_blank" rel="noopener" href="' + esc(f.url) + '" title="' + esc(f.nama) + '">' + esc(f.nama) + '</a>'
+    + '<span class="shrink-0 text-xs text-slate-500">' + fmtUkuran(f.ukuran) + '</span>'
+    + '<a class="shrink-0 text-slate-500 hover:text-primary" href="' + esc(f.unduh) + '" aria-label="Unduh ' + esc(f.nama) + '"><span class="material-symbols-outlined !text-xl">download</span></a></li>').join('') + '</ul>';
+}
+function waktuPgHtml(p) {
+  const baris = [];
+  if (jenisUjian(p.Jenis) && p.Mulai) baris.push('Mulai: ' + fmtWaktu(p.Mulai));
+  if (p.Tenggat) {
+    const m = hitungMundur(p.Tenggat);
+    baris.push((p.Jenis === 'Tugas' ? 'Tenggat: ' : jenisUjian(p.Jenis) ? 'Berakhir: ' : 'Sampai: ') + fmtWaktu(p.Tenggat) + (m.teks && m.teks !== 'Sudah lewat' ? ' · ' + m.teks : ''));
+  }
+  return baris.length ? '<p class="mt-2 text-xs font-semibold text-slate-700">' + baris.map(esc).join('<br>') + '</p>' : '';
+}
+function instruksiBoxHtml(p) {
+  if (!p.Instruksi && !(p.LampiranInstruksi && p.LampiranInstruksi.length)) return '';
+  return '<div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3"><div class="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-amber-800"><span class="material-symbols-outlined !text-base">assignment</span>Instruksi Dosen</div>'
+    + (p.Instruksi ? '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-800">' + esc(p.Instruksi) + '</p>' : '') + berkasHtml(p.LampiranInstruksi) + '</div>';
+}
 function pengumumanHtml(list) {
-  if (!list || (!list.length && !AppState.isAdmin)) return ''; // anggota tidak perlu melihat bagian kosong
-  const kartu = list.map(p => '<article tabindex="0" class="card pg-kartu p-4' + (p.Penting ? ' pg-penting bg-red-50/60' : '') + '">'
+  const aktif = (list || []).filter(pgAktif);
+  if (!list || (!aktif.length && !AppState.isAdmin)) return ''; // tamu dan anggota tidak perlu melihat bagian kosong
+  const kartu = aktif.map(p => '<article tabindex="0" data-tenggat="' + esc(p.Tenggat || '') + '" class="card pg-kartu p-4 ' + (p.Penting ? 'pg-penting' : 'pg-biasa') + '">'
+    + '<div class="pg-pita"><span class="material-symbols-outlined !text-base">' + (p.Penting ? 'priority_high' : 'campaign') + '</span>' + (p.Penting ? 'Penting' : 'Pengumuman') + '</div>'
     + '<div class="flex flex-wrap items-center gap-2">'
-    + (p.Penting ? '<span class="chip bg-red-100 text-red-700"><span class="material-symbols-outlined !text-sm">priority_high</span>Penting</span>' : '')
-    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Berakhir ? ' · sampai ' + esc(tglSingkat(p.Berakhir)) : '') + '</span></div>'
-    + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
-    + '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p></article>').join('');
+    + (p.Jenis !== 'Umum' ? '<span class="chip ' + (JENIS_PG[p.Jenis] || JENIS_PG.Umum) + '">' + esc(p.Jenis) + '</span>' : '')
+    + (p.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(p.MataKuliah) + '</span>' : '')
+    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + '</span></div>'
+    + '<h3 class="mt-2 text-lg font-extrabold leading-snug">' + esc(p.Judul) + '</h3>'
+    + '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p>'
+    + waktuPgHtml(p) + berkasHtml(p.Lampiran) + instruksiBoxHtml(p) + '</article>').join('');
   return '<section class="mt-6" aria-label="Pengumuman"><div class="mb-3 flex items-center justify-between gap-3">'
     + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">campaign</span>Pengumuman</h2>'
     + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[36px]" onclick="bukaPengumumanAdmin()"><span class="material-symbols-outlined">edit_note</span>Kelola</button>' : '') + '</div>'
-    + (list.length ? '<div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">' + kartu + '</div>'
+    + (aktif.length ? '<div id="pgDaftar" class="grid gap-4 md:grid-cols-2">' + kartu + '</div>'
       : '<div class="card p-6 text-center text-sm text-slate-500">Belum ada pengumuman. Tekan Kelola untuk menulis pengumuman pertama.</div>') + '</section>';
 }
 function bukaPengumumanAdmin() { AppState.tab = 'Pengumuman'; AppState.pengumumanAdm = null; navigateTo('admin'); }
@@ -1409,43 +1313,115 @@ async function paintPengumumanAdmin() {
     if (AppState.tab === 'Pengumuman') renderPengumumanAdmin();
   } catch (e) { if ($('adminBody')) $('adminBody').innerHTML = ''; fail(e); }
 }
+function daftarBerkasAdminHtml(bagian) {
+  const list = AppState.pgFiles[bagian] || [];
+  return list.map((f, i) => '<li class="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm ring-1 ring-slate-200"><span class="material-symbols-outlined text-primary">' + iconTugas(f.nama) + '</span>'
+    + '<span class="min-w-0 flex-1 truncate">' + esc(f.nama) + '</span><span class="shrink-0 text-xs text-slate-500">' + fmtUkuran(f.ukuran) + '</span>'
+    + '<button type="button" class="btn btn-ghost !min-h-[32px] !px-2 !text-red-700" onclick="lepasBerkasPg(\'' + bagian + '\',' + i + ')" aria-label="Lepas ' + esc(f.nama) + '"><span class="material-symbols-outlined !text-xl">close</span></button></li>').join('');
+}
+function paintBerkasPg() {
+  ['lampiran', 'instruksi'].forEach(b => { const el = $('pgBerkas_' + b); if (el) el.innerHTML = daftarBerkasAdminHtml(b); });
+}
+function lepasBerkasPg(bagian, i) { AppState.pgFiles[bagian].splice(i, 1); paintBerkasPg(); }
+/** Unggah file satu per satu (maks. 15 MB per file); tiap file langsung masuk ke Drive dan muncul di daftar. */
+async function pilihBerkasPg(inp, bagian) {
+  const files = Array.from(inp.files || []); inp.value = '';
+  const info = $('pgInfo_' + bagian);
+  for (const f of files) {
+    if (AppState.pgFiles[bagian].length >= 30) { toast('Maksimal 30 file per bagian.', 'error'); break; }
+    if (f.size > 15 * 1024 * 1024) { toast(f.name + ': ukuran melebihi 15 MB.', 'error'); continue; }
+    AppState.pgUnggah++;
+    if (info) info.textContent = 'Mengunggah ' + f.name + ' (' + fmtUkuran(f.size) + ')…';
+    try {
+      const d = await fileToDataUrl(f);
+      const r = await call('api_unggahLampiran', d, f.name);
+      AppState.pgFiles[bagian].push(r); paintBerkasPg();
+    } catch (e) { toast(f.name + ': ' + (e.message || 'gagal diunggah'), 'error'); }
+    AppState.pgUnggah--;
+  }
+  if ($('pgInfo_' + bagian)) $('pgInfo_' + bagian).textContent = '';
+}
 function renderPengumumanAdmin() {
   const body = $('adminBody'); if (!body || !AppState.pengumumanAdm) return;
-  const rows = AppState.pengumumanAdm.rows;
-  const form = '<form id="frmPengumuman" class="card mb-4 grid gap-3 p-5" onsubmit="kirimPengumuman(event)"><input type="hidden" id="pgId" value="">'
-    + '<h2 id="pgJudulForm" class="font-bold">Tulis Pengumuman</h2>'
-    + '<div><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="120" required placeholder="Contoh: Kumpul kelompok Sabtu"></div>'
-    + '<div><label class="lbl" for="pgIsi">Isi pengumuman</label><textarea id="pgIsi" class="inp" rows="5" maxlength="1500" required placeholder="Tulis info yang perlu diketahui teman sekelas"></textarea></div>'
-    + '<div class="grid gap-3 sm:grid-cols-2"><div><label class="lbl" for="pgBerakhir">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
-    + '<p class="mt-1 text-xs text-slate-500">Setelah tanggal ini lewat, pengumuman hilang dari Beranda. Kosongkan bila tidak ada batas.</p></div>'
-    + '<label class="flex cursor-pointer items-center gap-3 self-start pt-2 sm:pt-7"><input id="pgPenting" type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"><span class="font-semibold">Tandai penting</span></label></div>'
-    + '<div class="flex flex-wrap gap-2"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">campaign</span><span id="pgTombol">Terbitkan</span></button>'
+  const rows = AppState.pengumumanAdm.rows, matkul = AppState.pengumumanAdm.matkul || [];
+  AppState.pgFiles = { lampiran: [], instruksi: [] };
+  const opsiMk = '<option value="">Umum (tanpa mata kuliah)</option>' + matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
+  const opsiJenis = [['Umum', 'Umum'], ['Tugas', 'Tugas'], ['UTS', 'UTS'], ['UAS', 'UAS']].map(j => '<option value="' + j[0] + '">' + j[1] + '</option>').join('');
+  const berkas = (b, label) => '<div><label class="lbl">' + label + '</label>'
+    + '<input type="file" multiple class="inp" onchange="pilihBerkasPg(this,\'' + b + '\')" aria-label="' + label + '">'
+    + '<p class="mt-1 text-xs text-slate-500">Semua format, maks. 15 MB per file, boleh banyak file sekaligus.</p>'
+    + '<p id="pgInfo_' + b + '" class="text-xs font-semibold text-primary"></p><ul id="pgBerkas_' + b + '" class="mt-1 space-y-1"></ul></div>';
+  const form = '<form id="frmPengumuman" class="card mb-4 grid gap-3 p-5 md:grid-cols-2" onsubmit="kirimPengumuman(event)"><input type="hidden" id="pgId" value="">'
+    + '<h2 id="pgJudulForm" class="font-bold md:col-span-2">Tulis Pengumuman</h2>'
+    + '<div><label class="lbl" for="pgJenis">Jenis</label><select id="pgJenis" class="inp" onchange="aturFormPengumuman()">' + opsiJenis + '</select></div>'
+    + '<div id="pgMkBox" class="hidden"><label class="lbl" for="pgMatkul">Mata kuliah</label><select id="pgMatkul" class="inp">' + opsiMk + '</select></div>'
+    + '<div class="md:col-span-2"><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="120" required placeholder="Contoh: Kumpul kelompok Sabtu"></div>'
+    + '<div class="md:col-span-2"><label class="lbl" for="pgIsi">Isi pengumuman</label><textarea id="pgIsi" class="inp" rows="4" maxlength="1500" required placeholder="Tulis info yang perlu diketahui teman sekelas"></textarea></div>'
+    + '<div id="pgMulaiBox" class="hidden md:col-span-2"><label class="lbl" for="pgMulai">Tanggal dan jam mulai ujian (WITA)</label><input id="pgMulai" class="inp" type="datetime-local">'
+    + '<p class="mt-1 text-xs text-slate-500">Jadwal ini otomatis tampil di Agenda.</p></div>'
+    + '<div><label class="lbl" for="pgBerakhir" id="pgBerakhirLbl">Tanggal berakhir (opsional)</label><input id="pgBerakhir" class="inp" type="date">'
+    + '<p id="pgBerakhirInfo" class="mt-1 text-xs text-slate-500"></p></div>'
+    + '<div><label class="lbl" for="pgBerakhirJam" id="pgJamLbl">Jam berakhir (opsional)</label><input id="pgBerakhirJam" class="inp" type="time">'
+    + '<p id="pgJamInfo" class="mt-1 text-xs text-slate-500"></p></div>'
+    + '<div class="md:col-span-2">' + berkas('lampiran', 'Lampiran pengumuman (opsional)') + '</div>'
+    + '<div id="pgInstruksiBox" class="hidden space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3 md:col-span-2">'
+    + '<div><label class="lbl" for="pgInstruksi">Instruksi dosen (opsional)</label><textarea id="pgInstruksi" class="inp" rows="4" maxlength="3000" placeholder="Salin instruksi dari dosen. Tampil di Beranda dan di menu Kuliah › Instruksi."></textarea></div>'
+    + berkas('instruksi', 'File instruksi dosen (opsional)') + '</div>'
+    + '<label class="flex cursor-pointer items-center gap-3 md:col-span-2"><input id="pgPenting" type="checkbox" class="h-5 w-5 accent-[#0d5c3a]"><span class="font-semibold">Tandai penting (tampil merah menyala)</span></label>'
+    + '<div class="flex flex-wrap gap-2 md:col-span-2"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">campaign</span><span id="pgTombol">Terbitkan</span></button>'
     + '<button type="button" id="pgBatalUbah" class="btn btn-ghost hidden" onclick="batalUbahPengumuman()">Batal ubah</button></div>'
-    + '<p class="text-xs text-slate-500">Pengumuman tampil untuk umum di Beranda, siapa saja bisa membacanya tanpa login. Jangan menulis info rahasia (nomor HP, kata sandi, tautan grup). Tidak dikirim lewat WhatsApp atau email.</p></form>';
+    + '<p class="text-xs text-slate-500 md:col-span-2">Pengumuman, lampiran, dan instruksi dosen tampil untuk umum di Beranda tanpa login. Jangan menulis info rahasia (nomor HP, kata sandi, tautan grup). Pengumuman baru dikabarkan ke anggota lewat WhatsApp bila notifikasi aktif.</p></form>';
   const daftar = rows.length ? rows.map(p => '<article class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-start' + (p.Aktif ? '' : ' opacity-70') + '">'
     + '<div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">'
     + (p.Penting ? '<span class="chip bg-red-100 text-red-700">Penting</span>' : '')
+    + '<span class="chip ' + (JENIS_PG[p.Jenis] || JENIS_PG.Umum) + '">' + esc(p.Jenis) + '</span>'
+    + (p.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(p.MataKuliah) + '</span>' : '')
     + (p.Aktif ? '<span class="chip bg-emerald-100 text-emerald-800">Tampil</span>' : '<span class="chip bg-slate-200 text-slate-700">Sudah berakhir</span>')
-    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Berakhir ? ' · berakhir ' + esc(tglSingkat(p.Berakhir)) : ' · tanpa batas') + '</span></div>'
+    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Tenggat ? ' · berakhir ' + esc(fmtWaktu(p.Tenggat)) : ' · tanpa batas') + '</span></div>'
     + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
-    + '<p class="mt-1 line-clamp-3 whitespace-pre-line text-sm text-slate-600">' + esc(p.Isi) + '</p></div>'
+    + '<p class="mt-1 line-clamp-3 whitespace-pre-line text-sm text-slate-600">' + esc(p.Isi) + '</p>'
+    + (p.Lampiran.length || p.LampiranInstruksi.length || p.Instruksi ? '<p class="mt-1 text-xs text-slate-500">' + (p.Lampiran.length ? p.Lampiran.length + ' lampiran' : '') + (p.Instruksi || p.LampiranInstruksi.length ? ((p.Lampiran.length ? ' · ' : '') + 'ada instruksi dosen' + (p.LampiranInstruksi.length ? ' (' + p.LampiranInstruksi.length + ' file)' : '')) : '') + '</p>' : '')
+    + '</div>'
     + '<div class="flex shrink-0 gap-2"><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahPengumuman(\'' + p.ID + '\')" aria-label="Ubah ' + esc(p.Judul) + '"><span class="material-symbols-outlined">edit</span></button>'
     + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengumuman(\'' + p.ID + '\')" aria-label="Hapus ' + esc(p.Judul) + '"><span class="material-symbols-outlined">delete</span></button></div></article>').join('')
     : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">campaign</span><p class="mt-2">Belum ada pengumuman.</p></div>';
   body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>';
+  aturFormPengumuman();
+}
+/** Isian menyesuaikan jenis: ujian punya jam mulai; Tugas/UTS/UAS punya mata kuliah dan instruksi dosen; Tugas wajib bertenggat. */
+function aturFormPengumuman() {
+  const j = $('pgJenis') ? $('pgJenis').value : 'Umum', khusus = j !== 'Umum', ujian = jenisUjian(j);
+  $('pgMkBox').classList.toggle('hidden', !khusus);
+  $('pgInstruksiBox').classList.toggle('hidden', !khusus);
+  $('pgMulaiBox').classList.toggle('hidden', !ujian);
+  $('pgMulai').required = ujian;
+  $('pgBerakhir').required = j === 'Tugas';
+  $('pgBerakhirLbl').textContent = j === 'Tugas' ? 'Tenggat tugas (tanggal)' : ujian ? 'Tanggal berakhir ujian' : 'Tanggal berakhir (opsional)';
+  $('pgJamLbl').textContent = j === 'Tugas' ? 'Jam tenggat (kosong = akhir hari)' : ujian ? 'Jam selesai ujian (opsional)' : 'Jam berakhir (opsional)';
+  $('pgBerakhirInfo').textContent = ujian ? 'Isi bila ujian berlangsung beberapa hari (misal 9–13 November). Kosongkan untuk ujian satu hari.'
+    : 'Pengumuman hilang dari Beranda setelah tanggal dan jam ini lewat. ' + (j === 'Tugas' ? '' : 'Kosongkan bila tanpa batas.');
+  $('pgJamInfo').textContent = ujian ? 'Kosong = 2 jam dari jam mulai. Ujian berperiode menyala seharian di Agenda.' : 'Kosong = sampai akhir hari tanggal berakhir.';
 }
 function ubahPengumuman(id) {
   const p = AppState.pengumumanAdm.rows.find(x => x.ID === id); if (!p) return;
-  $('pgId').value = p.ID; $('pgJudul').value = p.Judul; $('pgIsi').value = p.Isi;
-  $('pgBerakhir').value = p.Berakhir || ''; $('pgPenting').checked = !!p.Penting;
+  $('pgId').value = p.ID; $('pgJenis').value = p.Jenis; aturFormPengumuman();
+  $('pgMatkul').value = p.MataKuliah || ''; $('pgJudul').value = p.Judul; $('pgIsi').value = p.Isi;
+  $('pgMulai').value = p.Mulai ? p.Mulai.slice(0, 16) : ''; $('pgBerakhir').value = p.Berakhir || ''; $('pgBerakhirJam').value = p.BerakhirJam || '';
+  $('pgInstruksi').value = p.Instruksi || ''; $('pgPenting').checked = !!p.Penting;
+  AppState.pgFiles = { lampiran: p.Lampiran.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })), instruksi: p.LampiranInstruksi.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })) };
+  paintBerkasPg();
   $('pgJudulForm').textContent = 'Ubah Pengumuman'; $('pgTombol').textContent = 'Simpan Perubahan'; $('pgBatalUbah').classList.remove('hidden');
   $('frmPengumuman').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('pgJudul').focus();
 }
 function batalUbahPengumuman() { renderPengumumanAdmin(); }
 async function kirimPengumuman(ev) {
   ev.preventDefault();
+  if (AppState.pgUnggah > 0) return toast('Tunggu, file masih diunggah.', 'error');
   const btn = ev.target.querySelector('[type=submit]');
-  const p = { id: $('pgId').value, judul: $('pgJudul').value.trim(), isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked, berakhir: $('pgBerakhir').value };
+  const j = $('pgJenis').value, mulai = $('pgMulai').value;
+  const p = { id: $('pgId').value, jenis: j, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked,
+    mulai: jenisUjian(j) && mulai ? mulai + ':00+08:00' : '', berakhir: $('pgBerakhir').value, berakhirJam: $('pgBerakhirJam').value,
+    instruksi: $('pgInstruksi').value.trim(), lampiran: AppState.pgFiles.lampiran, lampiranInstruksi: AppState.pgFiles.instruksi };
   const ubah = !!p.id;
   setBusy(btn, true, 'Menyimpan…');
   try { AppState.pengumumanAdm = await call('api_simpanPengumuman', p); toast(ubah ? 'Pengumuman diperbarui.' : 'Pengumuman diterbitkan.'); renderPengumumanAdmin(); }
@@ -1453,13 +1429,38 @@ async function kirimPengumuman(ev) {
 }
 function konfirmasiHapusPengumuman(id) {
   openModal('<div class="p-5"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-red-100 text-red-700"><span class="material-symbols-outlined">delete_forever</span></span>'
-    + '<div><h2 class="text-lg font-bold">Hapus pengumuman?</h2><p class="text-sm text-slate-600">Pengumuman akan hilang dari Beranda semua anggota. Tindakan ini tidak dapat dibatalkan.</p></div></div>'
+    + '<div><h2 class="text-lg font-bold">Hapus pengumuman?</h2><p class="text-sm text-slate-600">Pengumuman, lampiran, dan instruksi dosen akan hilang (file di Drive ikut dihapus). Bila berupa jadwal UTS/UAS, jadwalnya juga hilang dari Agenda. Tindakan ini tidak dapat dibatalkan.</p></div></div>'
     + '<div class="mt-5 flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()" data-autofocus>Batal</button>'
     + '<button class="btn btn-danger" onclick="hapusPengumuman(\'' + id + '\')">Ya, hapus</button></div></div>');
 }
 async function hapusPengumuman(id) {
   try { AppState.pengumumanAdm = await call('api_hapusPengumuman', id); closeModal(); toast('Pengumuman dihapus.'); renderPengumumanAdmin(); }
   catch (e) { closeModal(); fail(e); }
+}
+
+/* ---- Instruksi Dosen (tab di menu Kuliah): data yang sama dengan Pengumuman Tugas/UTS/UAS ---- */
+pages.instruksi = async () => {
+  if (!AppState.token) return lockedHtml('Silakan masuk terlebih dahulu.');
+  if (!isApproved()) return lockedHtml('Biodata Anda belum disetujui admin, sehingga Instruksi belum dapat dibuka.', '<button class="btn btn-primary mt-5" onclick="navigateTo(\'status\')">Lihat Status</button>');
+  AppState.instruksi = await call('api_instruksi');
+  const opsi = AppState.instruksi.matkul.map(m => '<option value="' + esc(m) + '"' + (m === AppState.instruksiFilter ? ' selected' : '') + '>' + esc(m) + '</option>').join('');
+  return '<div class="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><h1 class="text-2xl font-extrabold text-primary-dark">Instruksi Dosen</h1>'
+    + '<p class="text-sm text-slate-500">Instruksi Tugas, UTS, dan UAS. Dibuat admin lewat Pengumuman, jadi tidak perlu input dua kali.</p></div>'
+    + '<div class="flex w-full gap-2 sm:w-auto"><div class="flex-1 sm:w-72"><label class="sr-only" for="insFilter">Mata kuliah</label>'
+    + '<select id="insFilter" class="inp" onchange="AppState.instruksiFilter=this.value;paintInstruksi()"><option value="">Semua mata kuliah</option>' + opsi + '</select></div>'
+    + (AppState.isAdmin ? '<button type="button" class="btn btn-primary shrink-0" onclick="bukaPengumumanAdmin()"><span class="material-symbols-outlined">add</span>Tulis</button>' : '') + '</div></div>'
+    + '<div id="instruksiList" class="space-y-3"></div>';
+};
+after.instruksi = () => paintInstruksi();
+function paintInstruksi() {
+  const box = $('instruksiList'); if (!box) return;
+  const f = AppState.instruksiFilter, list = ((AppState.instruksi && AppState.instruksi.rows) || []).filter(x => !f || x.MataKuliah === f);
+  box.innerHTML = list.length ? list.map(x => '<article class="card p-4' + (x.Aktif ? '' : ' opacity-70') + '"><div class="flex flex-wrap items-center gap-2">'
+    + '<span class="chip ' + (JENIS_PG[x.Jenis] || JENIS_PG.Umum) + '">' + esc(x.Jenis) + '</span>'
+    + (x.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(x.MataKuliah) + '</span>' : '')
+    + (x.Aktif ? '' : '<span class="chip bg-slate-200 text-slate-700">Sudah berakhir</span>') + '<span class="text-xs text-slate-500">' + esc(tgl(x.Dibuat)) + '</span></div>'
+    + '<h3 class="mt-1 font-bold">' + esc(x.Judul) + '</h3>' + waktuPgHtml(x) + instruksiBoxHtml(x) + '</article>').join('')
+    : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">assignment</span><p class="mt-2">Belum ada instruksi dosen' + (f ? ' untuk mata kuliah ini' : '') + '.</p></div>';
 }
 
 /* ---- Notifikasi WhatsApp & email: tab di Panel Admin (konfigurasi, blast WhatsApp, antrean) ---- */
@@ -1948,7 +1949,7 @@ function renderMenuAdmin() {
     + '<input id="mp_' + k + '" class="inp" type="text" maxlength="200" value="' + esc(M.pesan[k] || '') + '" placeholder="Pesan saat ditutup (opsional)"></div></div>';
   body.innerHTML = '<form class="card p-5" onsubmit="simpanMenuAdmin(event)"><h2 class="font-bold">Pengaturan Menu</h2>'
     + '<p class="mt-1 text-sm text-slate-600">Atur siapa yang dapat melihat tiap menu. Beranda dan Panel Admin selalu tampil. Admin tetap dapat membuka semua menu, yang disembunyikan ditandai ikon mata tercoret.</p>'
-    + '<div class="mt-3">' + ['pasar', 'teman', 'kuliah', 'kuliah_chat', 'kuliah_absen', 'kuliah_tugas', 'kuliah_materi', 'formulir', 'status'].map(baris).join('') + '</div>'
+    + '<div class="mt-3">' + ['tentang', 'pasar', 'teman', 'kuliah', 'kuliah_chat', 'kuliah_absen', 'kuliah_tugas', 'kuliah_instruksi', 'kuliah_materi', 'formulir', 'status'].map(baris).join('') + '</div>'
     + '<p class="mt-3 text-xs text-slate-500">Menu yang ditutup hilang dari navigasi dan, bila dibuka lewat tautan, menampilkan pesan di atas. Ini pengaturan tampilan, bukan pengamanan data. Pengguna yang sedang membuka aplikasi melihat perubahan setelah memuat ulang halaman.</p>'
     + '<div class="mt-4"><button type="submit" class="btn btn-primary"><span class="material-symbols-outlined">save</span>Simpan Pengaturan Menu</button></div></form>';
 }
@@ -1974,21 +1975,20 @@ function adminHtml() {
   const c = AppState.adminData.counts;
   const kpi = [['Total', c.total, 'groups', 'text-primary'], ['Menunggu', c.Menunggu, 'pending_actions', 'text-amber-700'],
     ['Disetujui', c.Disetujui, 'verified', 'text-emerald-700'], ['Ditolak', c.Ditolak, 'cancel', 'text-red-700']];
-  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pengingat', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'];
-  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pengingat: 'Pengingat', Pasar: 'Pasar', Menu: 'Menu', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
+  const tabs = ['Menunggu', 'Semua', 'Pengumuman', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'];
+  const labelTab = { Menunggu: 'Menunggu Persetujuan (' + c.Menunggu + ')', Semua: 'Semua Data (' + c.total + ')', Pengumuman: 'Pengumuman', Pasar: 'Pasar', Menu: 'Menu', Profil: 'Profil Kelas', Jadwal: 'Jadwal Kuliah', Notifikasi: 'Notifikasi' };
   return '<div class="mb-5"><h1 class="text-2xl font-extrabold text-primary-dark">Panel Admin</h1><p class="text-sm text-slate-500">Setujui pendaftar dan kelola data biodata.</p></div>'
     + '<div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">' + kpi.map(k => '<div class="card flex items-center gap-3 p-4"><span class="material-symbols-outlined !text-3xl ' + k[3] + '">' + k[2] + '</span>'
       + '<div><div class="text-2xl font-extrabold leading-none" data-hitung="' + k[1] + '">' + k[1] + '</div><div class="text-xs text-slate-500">' + k[0] + '</div></div></div>').join('') + '</div>'
     + '<div class="mb-4 flex flex-wrap items-center justify-between gap-3"><div class="flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1" role="tablist">'
     + tabs.map(t => '<button role="tab" aria-selected="' + (AppState.tab === t) + '" class="nav-btn ' + (AppState.tab === t ? 'active' : '') + '" onclick="setTab(\'' + t + '\')">' + labelTab[t] + '</button>').join('') + '</div>'
-    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pengingat', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
+    + '<div class="relative w-full sm:w-72' + (['Pengumuman', 'Pasar', 'Menu', 'Profil', 'Jadwal', 'Notifikasi'].indexOf(AppState.tab) > -1 ? ' hidden' : '') + '"><label class="sr-only" for="aq">Cari</label><span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>'
     + '<input id="aq" class="inp pl-10" type="search" placeholder="Cari nama / email / kantor…" oninput="AppState.q=this.value;paintAdmin()"></div></div>'
     + '<div id="adminBody"></div>';
 }
 function setTab(t) { AppState.tab = t; AppState.q = ''; $('app-container').innerHTML = adminHtml(); paintAdmin(); }
 function paintAdmin() {
   if (AppState.tab === 'Pengumuman') { paintPengumumanAdmin(); return; }
-  if (AppState.tab === 'Pengingat') { paintPengingatAdmin(); return; }
   if (AppState.tab === 'Pasar') { paintPasarAdmin(); return; }
   if (AppState.tab === 'Menu') { paintMenuAdmin(); return; }
   if (AppState.tab === 'Profil') { paintProfilAdmin(); return; }
