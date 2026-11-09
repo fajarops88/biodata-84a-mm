@@ -148,3 +148,17 @@
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Kartu pengumuman ringkas: <details>, penting terbuka otomatis */
+.pg-detail > summary { list-style: none; }
+.pg-detail > summary::-webkit-details-marker { display: none; }
+.pg-ringkas { display: flex; align-items: flex-start; gap: .75rem; padding: .85rem 1rem; min-height: 44px; cursor: pointer; }
+.pg-ringkas:focus-visible { outline: 3px solid #0d5c3a; outline-offset: -3px; border-radius: .75rem; }
+.pg-isi { padding: 0 1rem 1rem; }
+.pg-chev { transition: transform .2s ease; }
+.pg-detail[open] .pg-chev { transform: rotate(180deg); }
+.pg-detail[open] .pg-prev { display: none; }
+@media (prefers-reduced-motion: reduce) { .pg-chev { transition: none; } }
+.pg-kartu > .pg-pita { margin: 0; }
+.pg-kartu { overflow: visible; }
+.pg-detail[open] .pg-tg { display: none; }

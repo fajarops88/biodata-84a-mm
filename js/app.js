@@ -1289,23 +1289,38 @@ function instruksiBoxHtml(p) {
   return '<div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3"><div class="flex items-center gap-1 text-xs font-bold uppercase tracking-wide text-amber-800"><span class="material-symbols-outlined !text-base">assignment</span>Instruksi Dosen</div>'
     + (p.Instruksi ? '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-800">' + esc(p.Instruksi) + '</p>' : '') + berkasHtml(p.LampiranInstruksi) + '</div>';
 }
+const PG_TAMPIL_AWAL = 10; // pengumuman yang langsung tampil; sisanya lewat "Lihat semua"
+const barisPertama = t => String(t || '').split('\n').map(x => x.trim()).find(x => x) || '';
 function pengumumanHtml(list) {
   const aktif = (list || []).filter(pgAktif);
   if (!list || (!aktif.length && !AppState.isAdmin)) return ''; // tamu dan anggota tidak perlu melihat bagian kosong
-  const kartu = aktif.map(p => '<article tabindex="0" data-tenggat="' + esc(p.Tenggat || '') + '" class="card pg-kartu p-4 ' + (p.Penting ? 'pg-penting' : 'pg-biasa') + '">'
+  const kartu = aktif.map((p, i) => '<article data-tenggat="' + esc(p.Tenggat || '') + '" class="card pg-kartu ' + (p.Penting ? 'pg-penting' : 'pg-biasa') + (i >= PG_TAMPIL_AWAL ? ' pg-lebih hidden' : '') + '">'
     + '<div class="pg-pita"><span class="material-symbols-outlined !text-base">' + (p.Penting ? 'priority_high' : 'campaign') + '</span>' + (p.Penting ? 'Penting' : 'Pengumuman') + '</div>'
-    + '<div class="flex flex-wrap items-center gap-2">'
+    + '<details class="pg-detail"' + (p.Penting ? ' open' : '') + '><summary class="pg-ringkas">'
+    + '<span class="min-w-0 flex-1"><span class="flex flex-wrap items-center gap-2">'
     + (p.Jenis !== 'Umum' ? '<span class="chip ' + (JENIS_PG[p.Jenis] || JENIS_PG.Umum) + '">' + esc(p.Jenis) + '</span>' : '')
     + (p.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(p.MataKuliah) + '</span>' : '')
-    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + '</span></div>'
-    + '<h3 class="mt-2 text-lg font-extrabold leading-snug">' + esc(p.Judul) + '</h3>'
-    + '<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p>'
-    + waktuPgHtml(p) + berkasHtml((p.Lampiran || []).filter(f => !f.materi)) + materiPgHtml(p.Lampiran) + instruksiBoxHtml(p) + '</article>').join('');
+    + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + '</span>'
+    + (p.Tenggat ? '<span class="pg-tg text-xs font-semibold text-slate-700">· ' + (p.Jenis === 'Tugas' ? 'Tenggat ' : 'Sampai ') + esc(fmtWaktu(p.Tenggat)) + '</span>' : '') + '</span>'
+    + (p.Jenis !== 'Umum' ? '<span class="mt-1 block text-base font-extrabold leading-snug">' + esc(p.Judul) + '</span>' : '')
+    + '<span class="pg-prev mt-1 block truncate text-sm ' + (p.Jenis === 'Umum' ? 'font-bold text-slate-900' : 'text-slate-600') + '">' + esc(barisPertama(p.Isi)) + '</span></span>'
+    + '<span class="material-symbols-outlined pg-chev shrink-0 text-slate-500" aria-hidden="true">expand_more</span></summary>'
+    + '<div class="pg-isi"><p class="whitespace-pre-line text-sm leading-relaxed text-slate-700">' + esc(p.Isi) + '</p>'
+    + waktuPgHtml(p) + berkasHtml((p.Lampiran || []).filter(f => !f.materi)) + materiPgHtml(p.Lampiran) + instruksiBoxHtml(p) + '</div></details></article>').join('');
+  const lebih = aktif.length - PG_TAMPIL_AWAL;
   return '<section class="mt-6" aria-label="Pengumuman"><div class="mb-3 flex items-center justify-between gap-3">'
     + '<h2 class="flex items-center gap-2 text-lg font-bold text-primary-dark"><span class="material-symbols-outlined">campaign</span>Pengumuman</h2>'
     + (AppState.isAdmin ? '<button type="button" class="btn btn-ghost !min-h-[36px]" onclick="bukaPengumumanAdmin()"><span class="material-symbols-outlined">edit_note</span>Kelola</button>' : '') + '</div>'
-    + (aktif.length ? '<div id="pgDaftar" class="grid gap-4 md:grid-cols-2">' + kartu + '</div>'
+    + (aktif.length ? '<div id="pgDaftar" class="grid items-start gap-4 md:grid-cols-2">' + kartu + '</div>'
+      + (lebih > 0 ? '<div class="mt-3 text-center"><button type="button" id="pgSemua" class="btn btn-ghost" aria-expanded="false" onclick="togglePgSemua()">Lihat semua (' + aktif.length + ')</button></div>' : '')
       : '<div class="card p-6 text-center text-sm text-slate-500">Belum ada pengumuman. Tekan Kelola untuk menulis pengumuman pertama.</div>') + '</section>';
+}
+function togglePgSemua() {
+  const b = $('pgSemua'), d = $('pgDaftar'); if (!b || !d) return;
+  const buka = b.getAttribute('aria-expanded') !== 'true';
+  d.querySelectorAll('.pg-lebih').forEach(k => k.classList.toggle('hidden', !buka));
+  b.setAttribute('aria-expanded', String(buka));
+  b.textContent = buka ? 'Tampilkan lebih sedikit' : 'Lihat semua (' + d.children.length + ')';
 }
 function bukaPengumumanAdmin() { AppState.tab = 'Pengumuman'; AppState.pengumumanAdm = null; navigateTo('admin'); }
 
@@ -1383,7 +1398,7 @@ function renderPengumumanAdmin() {
   const body = $('adminBody'); if (!body || !AppState.pengumumanAdm) return;
   const rows = AppState.pengumumanAdm.rows, matkul = AppState.pengumumanAdm.matkul || [];
   AppState.pgFiles = { lampiran: [], materi: [], instruksi: [] };
-  const opsiMk = '<option value="">Umum (tanpa mata kuliah)</option>' + matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
+  const opsiMk = '<option value="">Pilih mata kuliah</option>' + matkul.map(m => '<option value="' + esc(m) + '">' + esc(m) + '</option>').join('');
   const opsiJenis = [['Umum', 'Umum'], ['Tugas', 'Tugas'], ['UTS', 'UTS'], ['UAS', 'UAS']].map(j => '<option value="' + j[0] + '">' + j[1] + '</option>').join('');
   const berkas = (b, label) => '<div><label class="lbl">' + label + '</label>'
     + '<input type="file" multiple class="inp" onchange="pilihBerkasPg(this,\'' + b + '\')" aria-label="' + label + '">'
@@ -1393,7 +1408,6 @@ function renderPengumumanAdmin() {
     + '<h2 id="pgJudulForm" class="font-bold md:col-span-2">Tulis Pengumuman</h2>'
     + '<div><label class="lbl" for="pgJenis">Jenis</label><select id="pgJenis" class="inp" onchange="aturFormPengumuman()">' + opsiJenis + '</select></div>'
     + '<div id="pgMkBox" class="hidden"><label class="lbl" for="pgMatkul">Mata kuliah</label><select id="pgMatkul" class="inp">' + opsiMk + '</select></div>'
-    + '<div class="md:col-span-2"><label class="lbl" for="pgJudul">Judul</label><input id="pgJudul" class="inp" type="text" maxlength="120" required placeholder="Contoh: Kumpul kelompok Sabtu"></div>'
     + '<div class="md:col-span-2"><label class="lbl" for="pgIsi">Isi pengumuman</label><textarea id="pgIsi" class="inp" rows="4" maxlength="1500" required placeholder="Tulis info yang perlu diketahui teman sekelas"></textarea></div>'
     + '<div id="pgMulaiBox" class="hidden md:col-span-2"><label class="lbl" for="pgMulai">Tanggal dan jam mulai ujian (WITA)</label><input id="pgMulai" class="inp" type="datetime-local">'
     + '<p class="mt-1 text-xs text-slate-500">Jadwal ini otomatis tampil di Agenda.</p></div>'
@@ -1420,12 +1434,12 @@ function renderPengumumanAdmin() {
     + (p.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(p.MataKuliah) + '</span>' : '')
     + (p.Aktif ? '<span class="chip bg-emerald-100 text-emerald-800">Tampil</span>' : '<span class="chip bg-slate-200 text-slate-700">Sudah berakhir</span>')
     + '<span class="text-xs text-slate-500">' + esc(tgl(p.Dibuat)) + (p.Tenggat ? ' · berakhir ' + esc(fmtWaktu(p.Tenggat)) : ' · tanpa batas') + '</span></div>'
-    + '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>'
+    + (p.Jenis !== 'Umum' ? '<h3 class="mt-1 font-bold">' + esc(p.Judul) + '</h3>' : '')
     + '<p class="mt-1 line-clamp-3 whitespace-pre-line text-sm text-slate-600">' + esc(p.Isi) + '</p>'
     + (p.Lampiran.length || p.LampiranInstruksi.length || p.Instruksi ? '<p class="mt-1 text-xs text-slate-500">' + (p.Lampiran.length ? p.Lampiran.length + ' lampiran' : '') + (p.Instruksi || p.LampiranInstruksi.length ? ((p.Lampiran.length ? ' · ' : '') + 'ada instruksi dosen' + (p.LampiranInstruksi.length ? ' (' + p.LampiranInstruksi.length + ' file)' : '')) : '') + '</p>' : '')
     + '</div>'
-    + '<div class="flex shrink-0 gap-2"><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahPengumuman(\'' + p.ID + '\')" aria-label="Ubah ' + esc(p.Judul) + '"><span class="material-symbols-outlined">edit</span></button>'
-    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengumuman(\'' + p.ID + '\')" aria-label="Hapus ' + esc(p.Judul) + '"><span class="material-symbols-outlined">delete</span></button></div></article>').join('')
+    + '<div class="flex shrink-0 gap-2"><button type="button" class="btn btn-ghost !min-h-[40px] !px-3" onclick="ubahPengumuman(\'' + p.ID + '\')" aria-label="Ubah ' + esc(p.Judul) + ': ' + esc(barisPertama(p.Isi).slice(0, 40)) + '"><span class="material-symbols-outlined">edit</span></button>'
+    + '<button type="button" class="btn btn-ghost !min-h-[40px] !px-3 !text-red-700" onclick="konfirmasiHapusPengumuman(\'' + p.ID + '\')" aria-label="Hapus ' + esc(p.Judul) + ': ' + esc(barisPertama(p.Isi).slice(0, 40)) + '"><span class="material-symbols-outlined">delete</span></button></div></article>').join('')
     : '<div class="card p-10 text-center text-slate-500"><span class="material-symbols-outlined !text-4xl">campaign</span><p class="mt-2">Belum ada pengumuman.</p></div>';
   body.innerHTML = form + '<div class="space-y-3">' + daftar + '</div>';
   aturFormPengumuman();
@@ -1434,6 +1448,7 @@ function renderPengumumanAdmin() {
 function aturFormPengumuman() {
   const j = $('pgJenis') ? $('pgJenis').value : 'Umum', khusus = j !== 'Umum', ujian = jenisUjian(j);
   $('pgMkBox').classList.toggle('hidden', !khusus);
+  $('pgMatkul').required = khusus;
   $('pgInstruksiBox').classList.toggle('hidden', !khusus);
   $('pgMulaiBox').classList.toggle('hidden', !ujian);
   $('pgMulai').required = ujian;
@@ -1447,13 +1462,13 @@ function aturFormPengumuman() {
 function ubahPengumuman(id) {
   const p = AppState.pengumumanAdm.rows.find(x => x.ID === id); if (!p) return;
   $('pgId').value = p.ID; $('pgJenis').value = p.Jenis; aturFormPengumuman();
-  $('pgMatkul').value = p.MataKuliah || ''; $('pgJudul').value = p.Judul; $('pgIsi').value = p.Isi;
+  $('pgMatkul').value = p.MataKuliah || ''; $('pgIsi').value = p.Isi;
   $('pgMulai').value = p.Mulai ? p.Mulai.slice(0, 16) : ''; $('pgBerakhir').value = p.Berakhir || ''; $('pgBerakhirJam').value = p.BerakhirJam || '';
   $('pgInstruksi').value = p.Instruksi || ''; $('pgPenting').checked = !!p.Penting;
   AppState.pgFiles = { lampiran: p.Lampiran.filter(f => !f.materi).map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })), materi: p.Lampiran.filter(f => f.materi).map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran, materi: true })), instruksi: p.LampiranInstruksi.map(f => ({ id: f.id, nama: f.nama, ukuran: f.ukuran })) };
   paintBerkasPg();
   $('pgJudulForm').textContent = 'Ubah Pengumuman'; $('pgTombol').textContent = 'Simpan Perubahan'; $('pgBatalUbah').classList.remove('hidden');
-  $('frmPengumuman').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('pgJudul').focus();
+  $('frmPengumuman').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('pgIsi').focus();
 }
 function batalUbahPengumuman() { renderPengumumanAdmin(); }
 async function kirimPengumuman(ev) {
@@ -1461,7 +1476,7 @@ async function kirimPengumuman(ev) {
   if (AppState.pgUnggah > 0) return toast('Tunggu, file masih diunggah.', 'error');
   const btn = ev.target.querySelector('[type=submit]');
   const j = $('pgJenis').value, mulai = $('pgMulai').value;
-  const p = { id: $('pgId').value, jenis: j, mataKuliah: $('pgMatkul').value, judul: $('pgJudul').value.trim(), isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked,
+  const p = { id: $('pgId').value, jenis: j, mataKuliah: $('pgMatkul').value, isi: $('pgIsi').value.trim(), penting: $('pgPenting').checked,
     mulai: jenisUjian(j) && mulai ? mulai + ':00+08:00' : '', berakhir: $('pgBerakhir').value, berakhirJam: $('pgBerakhirJam').value,
     instruksi: $('pgInstruksi').value.trim(), lampiran: AppState.pgFiles.lampiran.concat(AppState.pgFiles.materi), lampiranInstruksi: AppState.pgFiles.instruksi };
   const ubah = !!p.id;
