@@ -1296,7 +1296,7 @@ function pengumumanHtml(list) {
   if (!list || (!aktif.length && !AppState.isAdmin)) return ''; // tamu dan anggota tidak perlu melihat bagian kosong
   const kartu = aktif.map((p, i) => '<article data-tenggat="' + esc(p.Tenggat || '') + '" class="card pg-kartu ' + (p.Penting ? 'pg-penting' : 'pg-biasa') + (i >= PG_TAMPIL_AWAL ? ' pg-lebih hidden' : '') + '">'
     + '<div class="pg-pita"><span class="material-symbols-outlined !text-base">' + (p.Penting ? 'priority_high' : 'campaign') + '</span>' + (p.Penting ? 'Penting' : 'Pengumuman') + '</div>'
-    + '<details class="pg-detail"' + (p.Penting ? ' open' : '') + '><summary class="pg-ringkas">'
+    + '<details class="pg-detail"><summary class="pg-ringkas">'
     + '<span class="min-w-0 flex-1"><span class="flex flex-wrap items-center gap-2">'
     + (p.Jenis !== 'Umum' ? '<span class="chip ' + (JENIS_PG[p.Jenis] || JENIS_PG.Umum) + '">' + esc(p.Jenis) + '</span>' : '')
     + (p.MataKuliah ? '<span class="chip bg-primary-soft text-primary">' + esc(p.MataKuliah) + '</span>' : '')
