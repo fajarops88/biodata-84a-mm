@@ -1648,7 +1648,6 @@ function renderNotifBlast() {
       + '<p class="mt-2 text-xs text-slate-500">Server tetap mengirim satu batch tiap menit walau halaman ini ditutup.</p>' : '') + '</article>').join('')
     : '<p class="rounded-xl bg-white p-6 text-center text-slate-500">Belum ada blast.</p>';
   box.innerHTML = '<div class="grid gap-6 lg:grid-cols-12"><form class="card space-y-3 p-5 lg:col-span-5" onsubmit="mulaiBlast(event)"><h2 class="font-bold">Tulis Pesan</h2>'
-    + '<div><label class="lbl" for="blJudul">Judul (hanya untuk catatan admin)</label><input id="blJudul" class="inp" type="text" maxlength="80" required placeholder="Contoh: Info kumpul kelompok"></div>'
     + '<div><label class="lbl" for="blPesan">Isi pesan</label><textarea id="blPesan" class="inp" rows="7" maxlength="1000" required placeholder="Assalamu\'alaikum {nama}, ..."></textarea>'
     + '<p class="mt-1 text-xs text-slate-500">{nama} diganti nama panggilan tiap penerima. Gunakan *teks* untuk huruf tebal.</p></div>'
     + '<div class="grid grid-cols-2 gap-3"><div><label class="lbl" for="blBatch">Ukuran batch</label><select id="blBatch" class="inp">'
@@ -1675,7 +1674,8 @@ function pilihSemuaPenerima(on) {
 async function mulaiBlast(ev) {
   ev.preventDefault();
   const btn = ev.target.querySelector('[type=submit]');
-  const p = { judul: $('blJudul').value.trim(), pesan: $('blPesan').value.trim(), ukuranBatch: Number($('blBatch').value), jeda: $('blJeda').value.trim(), ids: Array.from(AppState.blastPilih || []) };
+  const pesanBlast = $('blPesan').value.trim();
+  const p = { judul: (pesanBlast.split('\n')[0].replace(/\s*\{nama\}/g, '').replace(/[*_~]/g, '').trim() || 'Pesan blast').slice(0, 80), pesan: pesanBlast, ukuranBatch: Number($('blBatch').value), jeda: $('blJeda').value.trim(), ids: Array.from(AppState.blastPilih || []) };
   setBusy(btn, true, 'Menyiapkan…');
   try { AppState.blastList = await call('api_blastBuat', p); toast('Blast dimulai. Batch pertama dikirim dalam satu menit.'); renderNotifBlast(); }
   catch (e) { setBusy(btn, false); fail(e); }
